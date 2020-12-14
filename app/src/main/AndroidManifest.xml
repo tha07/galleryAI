@@ -26,16 +26,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity android:name=".MainActivity2" />
         <activity android:name=".FullScreen" />
-
-        <service
-            android:name=".MyService"
-            android:enabled="true"
-            android:exported="true" />
-        <service
-            android:name=".MyIntentService_test"
-            android:exported="false" />
 
         <activity android:name=".Test_Service" />
         <activity android:name=".GalleryGrid" />
@@ -50,13 +41,6 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
-        <activity android:name=".MainActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
     </application>
 
 </manifest>

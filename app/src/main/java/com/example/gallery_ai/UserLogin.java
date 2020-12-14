@@ -29,16 +29,16 @@ public class UserLogin extends AppCompatActivity {
     String email,password;
     public static String userID,userEmail;
 
-    /*@Override
+    @Override
     public void onStart() {
         super.onStart();
         // Check if user is signed in (non-null) and update UI accordingly.
-
-        FirebaseUser currentUser = fAuth.getCurrentUser();
-        if(currentUser!=null){
-        //startActivity(new Intent(this,MainActivity.class));
+        if(userID!=null){
+            userID = fAuth.getCurrentUser().getUid();
+            startActivity(new Intent(UserLogin.this, GalleryGrid.class));
         }
-    }*/
+
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -74,7 +74,6 @@ public class UserLogin extends AppCompatActivity {
 
 
     private void loginUser() {
-
         fAuth.signInWithEmailAndPassword(email, password).addOnCompleteListener(new OnCompleteListener<AuthResult>() {
             @Override
             public void onComplete(@NonNull Task<AuthResult> task) {
@@ -85,7 +84,7 @@ public class UserLogin extends AppCompatActivity {
 
                     if(user!=null){
                         userCredentials.put(userID,userEmail);
-                        startActivity(new Intent(UserLogin.this, MainActivity.class));
+                        startActivity(new Intent(UserLogin.this,  GalleryGrid.class));
                     }
                 } else {
                     Toast.makeText(getApplicationContext(), "Δεν βρέθηκε χρήστης με τα στοιχεία σας. Δοκιμάστε ξανά", Toast.LENGTH_SHORT).show();
@@ -93,4 +92,5 @@ public class UserLogin extends AppCompatActivity {
             }
         });
     }
+
 }

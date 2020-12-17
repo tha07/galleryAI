@@ -22,12 +22,28 @@ import com.squareup.picasso.Picasso;
 import static com.example.gallery_ai.UserLogin.userID;
 
 public class FullScreen extends AppCompatActivity {
+    private ImageView mImage;
+    private TextView mText;
+    private Button deleteButton;
+
+    Intent intent = getIntent();
+    final String uri = intent.getStringExtra("tourl");
+    final String label = intent.getStringExtra("tolabel");
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        hideStatusBar();
+        initElements();
+        setData();
+        setListeners();
+    }
+
+
+    private void hideStatusBar(){
         View decorView = getWindow().getDecorView();
-        // Hide the status bar.
         int uiOptions = View.SYSTEM_UI_FLAG_FULLSCREEN;
         decorView.setSystemUiVisibility(uiOptions);
 
@@ -35,17 +51,17 @@ public class FullScreen extends AppCompatActivity {
         if (getSupportActionBar() != null) {
             getSupportActionBar().hide();
         }
-
-        Intent intent = getIntent();
-        final String uri = intent.getStringExtra("tourl");
-        final String label = intent.getStringExtra("tolabel");
-        ImageView mImage = findViewById(R.id.fullScreen);
-        TextView mText = findViewById(R.id.thatLabel);
-        Button deleteButton = findViewById(R.id.deleteButton);
-
+    }
+    private void initElements(){
+        mImage = findViewById(R.id.fullScreen);
+        mText = findViewById(R.id.thatLabel);
+        deleteButton = findViewById(R.id.deleteButton);
+    }
+    private void setData(){
         mText.setText(label);
         Picasso.with(FullScreen.this).load(uri).into(mImage);
-
+    }
+    private void setListeners(){
         deleteButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -53,13 +69,8 @@ public class FullScreen extends AppCompatActivity {
             }
 
         });
-
-
-
-
     }
-
-    public void deletePhoto(String collection, String document, String imageUri){
+    private void deletePhoto(String collection, String document, String imageUri){
         FirebaseFirestore db = FirebaseFirestore.getInstance();
         FirebaseStorage firebaseStorage = FirebaseStorage.getInstance();
         StorageReference storageReference = firebaseStorage.getReferenceFromUrl(imageUri);

@@ -45,20 +45,8 @@ public class UserLogin extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_user_login);
 
-        // Initialize Firebase Auth
-        emailField = findViewById(R.id.editTextTextEmailAddress);
-        passField = findViewById(R.id.editTextTextPassword);
-        loginButton = findViewById(R.id.loginButton);
-
-        loginButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                //Check for valid fields
-                    getValues();
-                    loginUser();
-                }
-
-        });
+        initElements();
+        setListeners();
 
 
 
@@ -66,10 +54,25 @@ public class UserLogin extends AppCompatActivity {
 
 
 
-
+    private void initElements(){
+        emailField = findViewById(R.id.editTextTextEmailAddress);
+        passField = findViewById(R.id.editTextTextPassword);
+        loginButton = findViewById(R.id.loginButton);
+    }
     private void getValues() {
         email = emailField.getText().toString();
         password = passField.getText().toString();
+    }
+
+    private void setListeners(){
+        loginButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                getValues();
+                loginUser();
+            }
+
+        });
     }
 
 

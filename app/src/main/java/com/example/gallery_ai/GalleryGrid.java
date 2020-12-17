@@ -218,7 +218,7 @@ public class GalleryGrid extends AppCompatActivity {
                                             userLabels.add(document.getId());
                                             userUrls.add(document.getData().get("url").toString());
                                         }
-                                        ImageAdapterGridView adapter = new ImageAdapterGridView(GalleryGrid.this, userUrls.size());
+                                        ImageAdapterGridView adapter = new ImageAdapterGridView(GalleryGrid.this);
                                         androidGridView.setAdapter(adapter);
 
 
@@ -238,16 +238,15 @@ public class GalleryGrid extends AppCompatActivity {
 
     public class ImageAdapterGridView extends BaseAdapter {
         private final Context mContext;
-        private final int mCount;
 
 
-        public ImageAdapterGridView(Context c, int a) {
+        public ImageAdapterGridView(Context c) {
             mContext = c;
-            mCount = a;
+
         }
 
         public int getCount() {
-            /*na ginei to mhkos twn photo*/return mCount;
+            /*na ginei to mhkos twn photo*/return userUrls.size();
         }
 
         public Object getItem(int position) {
@@ -264,7 +263,7 @@ public class GalleryGrid extends AppCompatActivity {
             final ImageView img =  myView.findViewById(R.id.imagelayout);
             TextView txt =  myView.findViewById(R.id.textlayout);
             txt.setText(userLabels.get(position));
-            Log.d("TAGI",String.valueOf(position));
+
             Picasso.with(mContext).load(userUrls.get(position)).fit().centerCrop().into(img);
 
             androidGridView.setOnItemClickListener(new AdapterView.OnItemClickListener() {

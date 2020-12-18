@@ -107,7 +107,6 @@ public class GalleryGrid extends AppCompatActivity {
             }
         }
         if (requestCode == PICK_IMAGE) {
-            //Εδω θα μπει η συνδεση με το Firebase και το Machine Learning κομμάτι που θα επιστρέφει την κατηγοριοποίηση της εικόνας
             Uri loadURI = data.getData();
             try {
                 File f = createImageFile();
@@ -286,7 +285,7 @@ public class GalleryGrid extends AppCompatActivity {
     }
 
     public String generateLabel(String dummyValue){
-        return "dog"+dummyValue;
+        return dummyValue;
     }
 
     public void signOut(){

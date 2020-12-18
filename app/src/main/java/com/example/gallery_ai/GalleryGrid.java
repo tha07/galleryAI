@@ -99,14 +99,17 @@ public class GalleryGrid extends AppCompatActivity {
                     uploadToFirebase(contentUri);
                 } catch (IOException e) {
                     e.printStackTrace();
+
                 }
 
 
-            } catch (IOException e) {
+            } catch (Exception e) {
                 e.printStackTrace();
+                startActivity(new Intent(this, GalleryGrid.class));
             }
         }
         if (requestCode == PICK_IMAGE) {
+            //Εδω θα μπει η συνδεση με το Firebase και το Machine Learning κομμάτι που θα επιστρέφει την κατηγοριοποίηση της εικόνας
             Uri loadURI = data.getData();
             try {
                 File f = createImageFile();
@@ -177,7 +180,7 @@ public class GalleryGrid extends AppCompatActivity {
 
     private void uploadToFirebase(final Uri uri){
         @SuppressLint("SimpleDateFormat") final String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
-        final StorageReference image = initialReference.child("dogs/dog"+timeStamp);
+        final StorageReference image = initialReference.child("dogs/"+timeStamp);
         final String generatedLabel = generateLabel(timeStamp);
         image.putFile(uri).addOnSuccessListener(new OnSuccessListener<UploadTask.TaskSnapshot>() {
                     @Override
@@ -217,7 +220,7 @@ public class GalleryGrid extends AppCompatActivity {
                                             userLabels.add(document.getId());
                                             userUrls.add(document.getData().get("url").toString());
                                         }
-                                        ImageAdapterGridView adapter = new ImageAdapterGridView(GalleryGrid.this);
+                                        ImageAdapterGridView adapter = new ImageAdapterGridView(GalleryGrid.this, userUrls.size());
                                         androidGridView.setAdapter(adapter);
 
 
@@ -237,15 +240,16 @@ public class GalleryGrid extends AppCompatActivity {
 
     public class ImageAdapterGridView extends BaseAdapter {
         private final Context mContext;
+        private final int mCount;
 
 
-        public ImageAdapterGridView(Context c) {
+        public ImageAdapterGridView(Context c, int a) {
             mContext = c;
-
+            mCount = a;
         }
 
         public int getCount() {
-            /*na ginei to mhkos twn photo*/return userUrls.size();
+            /*na ginei to mhkos twn photo*/return mCount;
         }
 
         public Object getItem(int position) {
@@ -262,7 +266,7 @@ public class GalleryGrid extends AppCompatActivity {
             final ImageView img =  myView.findViewById(R.id.imagelayout);
             TextView txt =  myView.findViewById(R.id.textlayout);
             txt.setText(userLabels.get(position));
-
+            Log.d("TAGI",String.valueOf(position));
             Picasso.with(mContext).load(userUrls.get(position)).fit().centerCrop().into(img);
 
             androidGridView.setOnItemClickListener(new AdapterView.OnItemClickListener() {

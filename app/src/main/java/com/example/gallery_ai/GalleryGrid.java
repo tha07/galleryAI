@@ -40,6 +40,8 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.CollectionReference;
 
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.Query.Direction;
+import com.google.firebase.firestore.Query;
 import com.google.firebase.firestore.QueryDocumentSnapshot;
 import com.google.firebase.firestore.QuerySnapshot;
 import com.google.firebase.storage.FirebaseStorage;
@@ -109,16 +111,16 @@ public class GalleryGrid extends AppCompatActivity {
             }
         }
         if (requestCode == PICK_IMAGE) {
-            //Εδω θα μπει η συνδεση με το Firebase και το Machine Learning κομμάτι που θα επιστρέφει την κατηγοριοποίηση της εικόνας
-            Uri loadURI = data.getData();
             try {
+                Uri loadURI = data.getData();
                 File f = createImageFile();
                 Bitmap bitmap = MediaStore.Images.Media.getBitmap(this.getContentResolver(), loadURI);
                 FileOutputStream out = new FileOutputStream(f);
                 bitmap.compress(Bitmap.CompressFormat.JPEG, 20, out);
                 uploadToFirebase(Uri.fromFile(f));
-            } catch (IOException e) {
+            } catch (Exception e) {
                 e.printStackTrace();
+                startActivity(new Intent(this, GalleryGrid.class));
             }
 
 
@@ -189,6 +191,7 @@ public class GalleryGrid extends AppCompatActivity {
                             @Override
                             public void onSuccess(Uri uri) { final FirebaseFirestore db = FirebaseFirestore.getInstance();
                             imageData.put("url",uri.toString());
+                            imageData.put("timestamp",generatedLabel);
                             addToFirestore(db, generatedLabel, imageData);
                             new updateImageViews().execute();
                             Toast.makeText(getApplicationContext(), "Η εικόνα ανέβηκε με επιτυχία", Toast.LENGTH_SHORT).show();
@@ -208,7 +211,8 @@ public class GalleryGrid extends AppCompatActivity {
         protected Void doInBackground(Void... voids) {
             final FirebaseFirestore db = FirebaseFirestore.getInstance();
             CollectionReference collRef = db.collection(userID);
-            collRef.get().
+
+            collRef.orderBy("timestamp", Direction.DESCENDING).get().
                     addOnCompleteListener(
                             new OnCompleteListener<QuerySnapshot>() {
                                 @Override

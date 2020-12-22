@@ -1,3 +1,4 @@
+
 package com.example.gallery_ai;
 
 import androidx.annotation.NonNull;
@@ -9,11 +10,13 @@ import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Environment;
+import android.preference.PreferenceManager;
 import android.provider.MediaStore;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -24,6 +27,8 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.BaseAdapter;
+import android.widget.Button;
+import android.widget.EditText;
 import android.widget.GridView;
 import android.widget.ImageView;
 import android.widget.TextView;
@@ -41,7 +46,6 @@ import com.google.firebase.firestore.CollectionReference;
 
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.Query.Direction;
-import com.google.firebase.firestore.Query;
 import com.google.firebase.firestore.QueryDocumentSnapshot;
 import com.google.firebase.firestore.QuerySnapshot;
 import com.google.firebase.storage.FirebaseStorage;
@@ -68,8 +72,12 @@ public class GalleryGrid extends AppCompatActivity {
     public static final int PICK_IMAGE = 2;
     public static List<String> userUrls = new ArrayList<>();
     public static List<String> userLabels = new ArrayList<>();
+    public static List<Uri> allUris = new ArrayList<>();
     public static Map<String, Object> imageData = new HashMap<>();
     public static Map<String, Object> dummyHash = new HashMap<>();
+
+    private EditText searchField;
+    private Button searchButton;
 
     StorageReference initialReference;
     GridView androidGridView;
@@ -80,11 +88,32 @@ public class GalleryGrid extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_gallery_grid);
 
+        SharedPreferences sp = getSharedPreferences("lastUser", MODE_PRIVATE);
+        SharedPreferences.Editor editor = sp.edit();
+        editor.putString("userID", userID);
+        editor.apply();
+
         androidGridView = findViewById(R.id.gridview_android_example);
         initialReference = FirebaseStorage.getInstance().getReference();
 
+        searchField = findViewById(R.id.editTextTextPersonName);
+        searchButton = findViewById(R.id.button2);
+
+
+
+
+
         checkifNewUser();
         new updateImageViews().execute();
+
+        searchButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                searchLabels(searchField.getText().toString());
+                System.out.println("PATHSE");
+            }
+
+        });
     }
 
     @Override
@@ -166,6 +195,7 @@ public class GalleryGrid extends AppCompatActivity {
     private void chooseImage(){
         Intent intent = new Intent();
         intent.setType("image/*");
+        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
         intent.setAction(Intent.ACTION_GET_CONTENT);
         startActivityForResult(Intent.createChooser(intent, "Select Picture"), PICK_IMAGE);
     }
@@ -296,8 +326,44 @@ public class GalleryGrid extends AppCompatActivity {
         return dummyValue;
     }
 
+    private void searchLabels(final String queue){
+            final FirebaseFirestore db = FirebaseFirestore.getInstance();
+            CollectionReference collRef = db.collection(userID);
+
+            collRef.orderBy("timestamp", Direction.DESCENDING).get().
+                    addOnCompleteListener(
+                            new OnCompleteListener<QuerySnapshot>() {
+                                @Override
+                                public void onComplete(@NonNull Task<QuerySnapshot> task) {
+                                    if (task.isSuccessful()) {
+                                        userLabels.clear();
+                                        userUrls.clear();
+                                        for (QueryDocumentSnapshot document : task.getResult()) {
+                                            if (((String) document.getId()).contains(queue)) {
+                                                userLabels.add(document.getId());
+                                                userUrls.add(document.getData().get("url").toString());
+
+                                            }
+
+                                        }
+                                        if(userLabels.size()!=0){
+                                        ImageAdapterGridView adapter = new ImageAdapterGridView(GalleryGrid.this, userUrls.size());
+                                        androidGridView.setAdapter(adapter);}
+
+
+                                    } else {
+                                        Log.d("TAG", "No such document");
+                                    }
+                                }
+                            });
+    }
+
     public void signOut(){
         FirebaseAuth.getInstance().signOut();
+        SharedPreferences saved_values = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+        SharedPreferences.Editor editor = saved_values.edit();
+        editor.remove("userID");
+        editor.commit();
         startActivity(new Intent(GalleryGrid.this, UserLogin.class));
 
     }

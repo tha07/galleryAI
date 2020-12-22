@@ -3,7 +3,10 @@ package com.example.gallery_ai;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.preference.PreferenceManager;
 import android.view.View;
 import android.os.Bundle;
 import android.widget.Button;
@@ -15,6 +18,7 @@ import com.google.android.gms.tasks.Task;
 import com.google.firebase.auth.AuthResult;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.FirebaseFirestoreSettings;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -33,10 +37,8 @@ public class UserLogin extends AppCompatActivity {
     public void onStart() {
         super.onStart();
         // Check if user is signed in (non-null) and update UI accordingly.
-        if(userID!=null){
-            userID = fAuth.getCurrentUser().getUid();
-            startActivity(new Intent(UserLogin.this, GalleryGrid.class));
-        }
+
+
 
     }
 
@@ -45,10 +47,23 @@ public class UserLogin extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_user_login);
 
+
+        SharedPreferences readPref = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+
+        String user2 = readPref.getString("userID","");
+        System.out.println(user2);
+        if(!user2.matches("")){
+            userID = user2;
+            startActivity(new Intent(UserLogin.this,  GalleryGrid.class));
+        }
+
+
         // Initialize Firebase Auth
         emailField = findViewById(R.id.editTextTextEmailAddress);
         passField = findViewById(R.id.editTextTextPassword);
         loginButton = findViewById(R.id.loginButton);
+
+
 
         loginButton.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -82,8 +97,15 @@ public class UserLogin extends AppCompatActivity {
                     userID = fAuth.getCurrentUser().getUid();
                     userEmail = fAuth.getCurrentUser().getEmail();
 
+                    SharedPreferences saved_values = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+                    SharedPreferences.Editor editor = saved_values.edit();
+                    editor.putString("userID", userID);
+                    editor.commit();
+
+
                     if(user!=null){
                         userCredentials.put(userID,userEmail);
+
                         startActivity(new Intent(UserLogin.this,  GalleryGrid.class));
                     }
                 } else {

@@ -2,18 +2,25 @@
 package com.example.gallery_ai;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.FileProvider;
-
-
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.content.ClipData;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.res.AssetFileDescriptor;
+import android.database.Cursor;
 import android.graphics.Bitmap;
+import android.graphics.Matrix;
+import android.hardware.camera2.CameraCharacteristics;
+import android.hardware.camera2.CameraManager;
+import android.media.ExifInterface;
 import android.net.Uri;
 import android.os.AsyncTask;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.preference.PreferenceManager;
@@ -39,6 +46,7 @@ import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 
 import static com.example.gallery_ai.UserLogin.userID;
+import static java.lang.Math.min;
 
 import com.google.android.gms.tasks.Task;
 import com.google.firebase.auth.FirebaseAuth;
@@ -53,16 +61,41 @@ import com.google.firebase.storage.StorageReference;
 import com.google.firebase.storage.UploadTask;
 import com.squareup.picasso.Picasso;
 
+import org.tensorflow.lite.DataType;
+import org.tensorflow.lite.Interpreter;
+import org.tensorflow.lite.TensorFlowLite;
+import org.tensorflow.lite.support.common.FileUtil;
+import org.tensorflow.lite.support.common.TensorOperator;
+import org.tensorflow.lite.support.common.TensorProcessor;
+import org.tensorflow.lite.support.image.ImageProcessor;
+import org.tensorflow.lite.support.image.TensorImage;
+import org.tensorflow.lite.support.image.ops.ResizeOp;
+import org.tensorflow.lite.support.image.ops.ResizeWithCropOrPadOp;
+import org.tensorflow.lite.support.image.ops.Rot90Op;
+import org.tensorflow.lite.support.label.TensorLabel;
+import org.tensorflow.lite.support.tensorbuffer.TensorBuffer;
+
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 
+import java.nio.ByteBuffer;
+import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 
 public class GalleryGrid extends AppCompatActivity {
@@ -72,9 +105,20 @@ public class GalleryGrid extends AppCompatActivity {
     public static final int PICK_IMAGE = 2;
     public static List<String> userUrls = new ArrayList<>();
     public static List<String> userLabels = new ArrayList<>();
+    public static List<String> userTimestamps = new ArrayList<>();
     public static List<Uri> allUris = new ArrayList<>();
     public static Map<String, Object> imageData = new HashMap<>();
     public static Map<String, Object> dummyHash = new HashMap<>();
+    private List<String> labels;
+    private final Interpreter.Options tfliteOptions = new Interpreter.Options();
+    private TensorImage inputImageBuffer;
+    private  int imageSizeX;
+    private  int imageSizeY;
+    private  TensorProcessor probabilityProcessor;
+
+    /** Output probability TensorBuffer. */
+    private  TensorBuffer outputProbabilityBuffer;
+
 
     private EditText searchField;
     private Button searchButton;
@@ -116,18 +160,77 @@ public class GalleryGrid extends AppCompatActivity {
         });
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+
         super.onActivityResult(requestCode, resultCode, data);
+
+
+
         if (requestCode == REQUEST_CODE_CAMERA) {
+
             try {
                 Bitmap bitmap = MediaStore.Images.Media.getBitmap(this.getContentResolver(), photoURI);
                 File f = new File(currentPhotoPath);
                 try {
+
                     FileOutputStream out = new FileOutputStream(f);
+                    /*
+                    if(getCameraAngle()==90){
+                        bitmap = rotateBitmap(bitmap,90);
+                    }
+                    else if(getCameraAngle()==180){
+                        bitmap = rotateBitmap(bitmap,180);
+                    }
+                    else if(getCameraAngle()==270){
+                        bitmap = rotateBitmap(bitmap,270);
+                    }
+                    else if(getCameraAngle()==0){
+                        bitmap = rotateBitmap(bitmap,0);
+                    }*/
                     bitmap.compress(Bitmap.CompressFormat.JPEG, 20, out); // bmp is your Bitmap instance
+
+                    MappedByteBuffer tfliteModel = FileUtil.loadMappedFile(this, "mobilenet_v1_1.0_224_quant.tflite");
+                    Interpreter tflite = new Interpreter(tfliteModel, tfliteOptions);
+                    // Loads labels out from the label file.
+                    labels = FileUtil.loadLabels(this, "labels_mobilenet_quant_v1_224.txt");
+                    int imageTensorIndex = 0;
+                    int[] imageShape = tflite.getInputTensor(imageTensorIndex).shape(); // {1, height, width, 3}
+                    imageSizeY = imageShape[1];
+                    imageSizeX = imageShape[2];
+                    DataType imageDataType = tflite.getInputTensor(imageTensorIndex).dataType();
+                    int probabilityTensorIndex = 0;
+                    int[] probabilityShape =
+                            tflite.getOutputTensor(probabilityTensorIndex).shape(); // {1, NUM_CLASSES}
+                    DataType probabilityDataType = tflite.getOutputTensor(probabilityTensorIndex).dataType();
+
+                    // Creates the input tensor.
+                    inputImageBuffer = new TensorImage(imageDataType);
+
+                    // Creates the output tensor and its processor.
+                    outputProbabilityBuffer = TensorBuffer.createFixedSize(probabilityShape, probabilityDataType);
+                    probabilityProcessor = new TensorProcessor.Builder().build();
+                    inputImageBuffer = loadImage(bitmap,0);
+                    tflite.run(inputImageBuffer.getBuffer(), outputProbabilityBuffer.getBuffer().rewind());
+                    Map<String, Float> labeledProbability =
+                            new TensorLabel(labels, probabilityProcessor.process(outputProbabilityBuffer))
+                                    .getMapWithFloatValue();
+
+                    Map.Entry<String, Float> maxEntry = null;
+
+                    for (Map.Entry<String, Float> entry : labeledProbability.entrySet())
+                    {
+                        if (maxEntry == null || entry.getValue().compareTo(maxEntry.getValue()) > 0)
+                        {
+                            maxEntry = entry;
+                        }
+                    }
                     Uri contentUri = Uri.fromFile(f);
-                    uploadToFirebase(contentUri);
+
+
+
+                    uploadToFirebase(contentUri,maxEntry.getKey());
                 } catch (IOException e) {
                     e.printStackTrace();
 
@@ -141,12 +244,67 @@ public class GalleryGrid extends AppCompatActivity {
         }
         if (requestCode == PICK_IMAGE) {
             try {
-                Uri loadURI = data.getData();
-                File f = createImageFile();
-                Bitmap bitmap = MediaStore.Images.Media.getBitmap(this.getContentResolver(), loadURI);
-                FileOutputStream out = new FileOutputStream(f);
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 20, out);
-                uploadToFirebase(Uri.fromFile(f));
+                //Uri loadURI = data.getData();
+                try{
+                ClipData clipped = data.getClipData();
+                for (int i = 0; i < clipped.getItemCount(); i++) {
+                    ClipData.Item mItem = clipped.getItemAt(i);
+                    File f = createImageFileMultiple(i);
+                    Bitmap bitmap = MediaStore.Images.Media.getBitmap(this.getContentResolver(), mItem.getUri());
+                    FileOutputStream out = new FileOutputStream(f);
+                    if(getCameraAngle()>0){
+                        bitmap = rotateBitmap(bitmap,90);
+                    }
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 20, out);
+                    uploadToFirebaseMultiple(Uri.fromFile(f),i);
+                }
+                }
+                catch(Exception e){
+                    Uri loadURI = data.getData();
+                    File f = createImageFile();
+                    Bitmap bitmap = MediaStore.Images.Media.getBitmap(this.getContentResolver(), loadURI);
+                    FileOutputStream out = new FileOutputStream(f);
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 20, out);
+
+
+                    MappedByteBuffer tfliteModel = FileUtil.loadMappedFile(this, "mobilenet_v1_1.0_224_quant.tflite");
+                    Interpreter tflite = new Interpreter(tfliteModel, tfliteOptions);
+                    // Loads labels out from the label file.
+                    labels = FileUtil.loadLabels(this, "labels_mobilenet_quant_v1_224.txt");
+                    int imageTensorIndex = 0;
+                    int[] imageShape = tflite.getInputTensor(imageTensorIndex).shape(); // {1, height, width, 3}
+                    imageSizeY = imageShape[1];
+                    imageSizeX = imageShape[2];
+                    DataType imageDataType = tflite.getInputTensor(imageTensorIndex).dataType();
+                    int probabilityTensorIndex = 0;
+                    int[] probabilityShape =
+                            tflite.getOutputTensor(probabilityTensorIndex).shape(); // {1, NUM_CLASSES}
+                    DataType probabilityDataType = tflite.getOutputTensor(probabilityTensorIndex).dataType();
+
+                    // Creates the input tensor.
+                    inputImageBuffer = new TensorImage(imageDataType);
+
+                    // Creates the output tensor and its processor.
+                    outputProbabilityBuffer = TensorBuffer.createFixedSize(probabilityShape, probabilityDataType);
+                    probabilityProcessor = new TensorProcessor.Builder().build();
+                    inputImageBuffer = loadImage(bitmap,0);
+                    tflite.run(inputImageBuffer.getBuffer(), outputProbabilityBuffer.getBuffer().rewind());
+                    Map<String, Float> labeledProbability =
+                            new TensorLabel(labels, probabilityProcessor.process(outputProbabilityBuffer))
+                                    .getMapWithFloatValue();
+
+                    Map.Entry<String, Float> maxEntry = null;
+
+                    for (Map.Entry<String, Float> entry : labeledProbability.entrySet())
+                    {
+                        if (maxEntry == null || entry.getValue().compareTo(maxEntry.getValue()) > 0)
+                        {
+                            maxEntry = entry;
+                        }
+                    }
+                    uploadToFirebase(Uri.fromFile(f), maxEntry.getKey());
+                }
+
             } catch (Exception e) {
                 e.printStackTrace();
                 startActivity(new Intent(this, GalleryGrid.class));
@@ -192,6 +350,21 @@ public class GalleryGrid extends AppCompatActivity {
         return image;
     }
 
+    private File createImageFileMultiple(int label) throws IOException {
+        // Create an image file name
+        @SuppressLint("SimpleDateFormat") String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+        String imageFileName = "JPEG_" + timeStamp + "_"+label;
+        File storageDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
+        File image = File.createTempFile(
+                imageFileName,  /* prefix */
+                ".jpg",         /* suffix */
+                storageDir      /* directory */
+        );
+        // Save a file: path for use with ACTION_VIEW intents
+        currentPhotoPath = image.getAbsolutePath();
+        return image;
+    }
+
     private void chooseImage(){
         Intent intent = new Intent();
         intent.setType("image/*");
@@ -210,7 +383,9 @@ public class GalleryGrid extends AppCompatActivity {
         }
     }
 
-    private void uploadToFirebase(final Uri uri){
+
+
+    private void uploadToFirebase(final Uri uri, String theKey){
         @SuppressLint("SimpleDateFormat") final String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
         final StorageReference image = initialReference.child("dogs/"+timeStamp);
         final String generatedLabel = generateLabel(timeStamp);
@@ -222,6 +397,7 @@ public class GalleryGrid extends AppCompatActivity {
                             public void onSuccess(Uri uri) { final FirebaseFirestore db = FirebaseFirestore.getInstance();
                             imageData.put("url",uri.toString());
                             imageData.put("timestamp",generatedLabel);
+                            imageData.put("label",theKey);
                             addToFirestore(db, generatedLabel, imageData);
                             new updateImageViews().execute();
                             Toast.makeText(getApplicationContext(), "Η εικόνα ανέβηκε με επιτυχία", Toast.LENGTH_SHORT).show();
@@ -233,6 +409,31 @@ public class GalleryGrid extends AppCompatActivity {
                     public void onFailure(@NonNull Exception e) { Toast.makeText(getApplicationContext(), "Υπήρξε κάποιο σφάλμα κατά το ανέβασμα της εικόνας", Toast.LENGTH_SHORT).show();
 
                     }});
+    }
+
+    private void uploadToFirebaseMultiple(final Uri uri, int label){
+        @SuppressLint("SimpleDateFormat") final String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+        final StorageReference image = initialReference.child("dogs/"+timeStamp+label);
+        final String generatedLabel = generateLabel(timeStamp+label);
+        image.putFile(uri).addOnSuccessListener(new OnSuccessListener<UploadTask.TaskSnapshot>() {
+            @Override
+            public void onSuccess(UploadTask.TaskSnapshot taskSnapshot) {
+                image.getDownloadUrl().addOnSuccessListener(new OnSuccessListener<Uri>() {
+                    @Override
+                    public void onSuccess(Uri uri) { final FirebaseFirestore db = FirebaseFirestore.getInstance();
+                        imageData.put("url",uri.toString());
+                        imageData.put("timestamp",timeStamp);
+                        addToFirestore(db, generatedLabel, imageData);
+                        new updateImageViews().execute();
+                        Toast.makeText(getApplicationContext(), "Η εικόνα ανέβηκε με επιτυχία", Toast.LENGTH_SHORT).show();
+                    }
+                });
+            }
+        }).addOnFailureListener(new OnFailureListener() {
+            @Override
+            public void onFailure(@NonNull Exception e) { Toast.makeText(getApplicationContext(), "Υπήρξε κάποιο σφάλμα κατά το ανέβασμα της εικόνας", Toast.LENGTH_SHORT).show();
+
+            }});
     }
 
     @SuppressLint("StaticFieldLeak")
@@ -250,9 +451,11 @@ public class GalleryGrid extends AppCompatActivity {
                                     if (task.isSuccessful()) {
                                         userLabels.clear();
                                         userUrls.clear();
+                                        userTimestamps.clear();
                                         for (QueryDocumentSnapshot document : task.getResult()) {
-                                            userLabels.add(document.getId());
+                                            userLabels.add(document.getData().get("label").toString());
                                             userUrls.add(document.getData().get("url").toString());
+                                            userTimestamps.add(document.getData().get("timestamp").toString());
                                         }
                                         ImageAdapterGridView adapter = new ImageAdapterGridView(GalleryGrid.this, userUrls.size());
                                         androidGridView.setAdapter(adapter);
@@ -310,6 +513,7 @@ public class GalleryGrid extends AppCompatActivity {
                     Intent myIntent = new Intent(GalleryGrid.this, FullScreen.class);
                     myIntent.putExtra("tourl", userUrls.get(position));
                     myIntent.putExtra("tolabel", userLabels.get(position));
+                    myIntent.putExtra("totimestamp", userTimestamps.get(position));
                     startActivity(myIntent);
                     overridePendingTransition(R.anim.zoom_enter, R.anim.zoom_exit);
                 }
@@ -338,13 +542,13 @@ public class GalleryGrid extends AppCompatActivity {
                                     if (task.isSuccessful()) {
                                         userLabels.clear();
                                         userUrls.clear();
+                                        userTimestamps.clear();
                                         for (QueryDocumentSnapshot document : task.getResult()) {
-                                            if (((String) document.getId()).contains(queue)) {
-                                                userLabels.add(document.getId());
+                                            if (((String) document.getData().get("label")).contains(queue)) {
+                                                userLabels.add((String) document.getData().get("label"));
                                                 userUrls.add(document.getData().get("url").toString());
-
+                                                userTimestamps.add(document.getData().get("timestamp").toString());
                                             }
-
                                         }
                                         if(userLabels.size()!=0){
                                         ImageAdapterGridView adapter = new ImageAdapterGridView(GalleryGrid.this, userUrls.size());
@@ -391,7 +595,52 @@ public class GalleryGrid extends AppCompatActivity {
         }
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    private int getCameraAngle(){
+        CameraManager manager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
+        int orientation = 0;
+        try{
+            String cameraID = manager.getCameraIdList()[0];
+            CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraID);
+            orientation = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
+            System.out.println(orientation);
+            return orientation;
 
+        }
+        catch(Exception e){
+            return orientation;
+        }
+
+
+    }
+
+    public Bitmap rotateBitmap(Bitmap original, float degrees) {
+        Matrix matrix = new Matrix();
+        matrix.preRotate(degrees);
+        Bitmap rotatedBitmap = Bitmap.createBitmap(original, 0, 0, original.getWidth(), original.getHeight(), matrix, true);
+        original.recycle();
+        return rotatedBitmap;
+    }
+
+    private TensorImage loadImage(final Bitmap bitmap, int sensorOrientation) {
+        // Loads bitmap into a TensorImage.
+        inputImageBuffer.load(bitmap);
+
+        // Creates processor for the TensorImage.
+        int cropSize = min(bitmap.getWidth(), bitmap.getHeight());
+        int numRotation = sensorOrientation / 90;
+        // TODO(b/143564309): Fuse ops inside ImageProcessor.
+        ImageProcessor imageProcessor =
+                new ImageProcessor.Builder()
+                        .add(new ResizeWithCropOrPadOp(cropSize, cropSize))
+                        // TODO(b/169379396): investigate the impact of the resize algorithm on accuracy.
+                        // To get the same inference results as lib_task_api, which is built on top of the Task
+                        // Library, use ResizeMethod.BILINEAR.
+                        .add(new ResizeOp(imageSizeX, imageSizeY, ResizeOp.ResizeMethod.NEAREST_NEIGHBOR))
+                        .add(new Rot90Op(numRotation))
+                        .build();
+        return imageProcessor.process(inputImageBuffer);
+    }
 
 
 }

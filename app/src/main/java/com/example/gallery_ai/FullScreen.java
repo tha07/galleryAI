@@ -35,15 +35,16 @@ public class FullScreen extends AppCompatActivity {
         Intent intent = getIntent();
         final String label = intent.getStringExtra("tolabel");
         final String uri = intent.getStringExtra("tourl");
+        final String timestamp = intent.getStringExtra("totimestamp");
 
 
         hideStatusBar();
         initElements();
         setData(label, uri);
-        setListeners(label, uri);
+        setListeners(label, uri, timestamp);
     }
 
-    private void deletePhoto(String collection, String document, String imageUri){
+    private void deletePhoto(String collection, String document, String imageUri, String thetimeStamp){
         FirebaseFirestore db = FirebaseFirestore.getInstance();
         FirebaseStorage firebaseStorage = FirebaseStorage.getInstance();
         StorageReference storageReference = firebaseStorage.getReferenceFromUrl(imageUri);
@@ -57,7 +58,7 @@ public class FullScreen extends AppCompatActivity {
         });
 
 
-        db.collection(collection).document(document)
+        db.collection(collection).document(thetimeStamp)
                 .delete()
                 .addOnSuccessListener(new OnSuccessListener<Void>() {
                     @Override
@@ -76,14 +77,14 @@ public class FullScreen extends AppCompatActivity {
 
     }
 
-    private void setListeners(final String theLabel, final String theURi){
+    private void setListeners(final String theLabel, final String theURi, final String whatTimeStamp){
 
 
 
         deleteButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                deletePhoto(userID, theLabel, theURi);
+                deletePhoto(userID, theLabel, theURi, whatTimeStamp);
             }
 
         });

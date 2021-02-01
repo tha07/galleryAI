@@ -41,6 +41,11 @@ import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.androidnetworking.AndroidNetworking;
+import com.androidnetworking.common.Priority;
+import com.androidnetworking.error.ANError;
+import com.androidnetworking.interfaces.JSONObjectRequestListener;
+import com.androidnetworking.interfaces.UploadProgressListener;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
@@ -49,6 +54,7 @@ import static com.example.gallery_ai.UserLogin.userID;
 import static java.lang.Math.min;
 
 import com.google.android.gms.tasks.Task;
+import com.google.common.net.MediaType;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.CollectionReference;
 
@@ -59,8 +65,11 @@ import com.google.firebase.firestore.QuerySnapshot;
 import com.google.firebase.storage.FirebaseStorage;
 import com.google.firebase.storage.StorageReference;
 import com.google.firebase.storage.UploadTask;
+import com.squareup.okhttp.MultipartBuilder;
 import com.squareup.picasso.Picasso;
 
+import org.json.JSONException;
+import org.json.JSONObject;
 import org.tensorflow.lite.DataType;
 import org.tensorflow.lite.Interpreter;
 import org.tensorflow.lite.TensorFlowLite;
@@ -80,6 +89,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 
+import java.lang.reflect.Array;
 import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
@@ -96,6 +106,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import okhttp3.MultipartBody;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 
 
 public class GalleryGrid extends AppCompatActivity {
@@ -191,46 +207,10 @@ public class GalleryGrid extends AppCompatActivity {
                     }*/
                     bitmap.compress(Bitmap.CompressFormat.JPEG, 20, out); // bmp is your Bitmap instance
 
-                    MappedByteBuffer tfliteModel = FileUtil.loadMappedFile(this, "mobilenet_v1_1.0_224_quant.tflite");
-                    Interpreter tflite = new Interpreter(tfliteModel, tfliteOptions);
-                    // Loads labels out from the label file.
-                    labels = FileUtil.loadLabels(this, "labels_mobilenet_quant_v1_224.txt");
-                    int imageTensorIndex = 0;
-                    int[] imageShape = tflite.getInputTensor(imageTensorIndex).shape(); // {1, height, width, 3}
-                    imageSizeY = imageShape[1];
-                    imageSizeX = imageShape[2];
-                    DataType imageDataType = tflite.getInputTensor(imageTensorIndex).dataType();
-                    int probabilityTensorIndex = 0;
-                    int[] probabilityShape =
-                            tflite.getOutputTensor(probabilityTensorIndex).shape(); // {1, NUM_CLASSES}
-                    DataType probabilityDataType = tflite.getOutputTensor(probabilityTensorIndex).dataType();
-
-                    // Creates the input tensor.
-                    inputImageBuffer = new TensorImage(imageDataType);
-
-                    // Creates the output tensor and its processor.
-                    outputProbabilityBuffer = TensorBuffer.createFixedSize(probabilityShape, probabilityDataType);
-                    probabilityProcessor = new TensorProcessor.Builder().build();
-                    inputImageBuffer = loadImage(bitmap,0);
-                    tflite.run(inputImageBuffer.getBuffer(), outputProbabilityBuffer.getBuffer().rewind());
-                    Map<String, Float> labeledProbability =
-                            new TensorLabel(labels, probabilityProcessor.process(outputProbabilityBuffer))
-                                    .getMapWithFloatValue();
-
-                    Map.Entry<String, Float> maxEntry = null;
-
-                    for (Map.Entry<String, Float> entry : labeledProbability.entrySet())
-                    {
-                        if (maxEntry == null || entry.getValue().compareTo(maxEntry.getValue()) > 0)
-                        {
-                            maxEntry = entry;
-                        }
-                    }
-                    Uri contentUri = Uri.fromFile(f);
+                    postRequest("http://192.168.1.3:5000/v1/vision/detection",f);
 
 
 
-                    uploadToFirebase(contentUri,maxEntry.getKey());
                 } catch (IOException e) {
                     e.printStackTrace();
 
@@ -642,6 +622,37 @@ public class GalleryGrid extends AppCompatActivity {
         return imageProcessor.process(inputImageBuffer);
     }
 
+   public void postRequest(String url, File file){
+
+        AndroidNetworking.upload(url)
+               .addMultipartFile("image",file)
+               .setPriority(Priority.HIGH)
+               .build()
+               .setUploadProgressListener(new UploadProgressListener() {
+                   @Override
+                   public void onProgress(long bytesUploaded, long totalBytes) {
+                       // do anything with progress
+                   }
+               })
+               .getAsJSONObject(new JSONObjectRequestListener() {
+                   @Override
+                   public void onResponse(JSONObject response) {
+                       // do anything with response
+                       try {
+                           JSONObject maxResult = (JSONObject) response.getJSONArray("predictions").get(0);
+                           uploadToFirebase(Uri.fromFile(file), (String) maxResult.get("label"));
+                       } catch (JSONException e) {
+                           e.printStackTrace();
+                       }
+                   }
+                   @Override
+                   public void onError(ANError error) {
+                       // handle error
+                   }
+               });
+   }
+
 
 }
+
 

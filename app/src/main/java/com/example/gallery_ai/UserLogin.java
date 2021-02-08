@@ -37,7 +37,14 @@ public class UserLogin extends AppCompatActivity {
     public void onStart() {
         super.onStart();
         // Check if user is signed in (non-null) and update UI accordingly.
+        SharedPreferences readPref = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
 
+        String user2 = readPref.getString("userID","");
+        System.out.println(user2);
+        if(!user2.matches("")){
+            userID = user2;
+            startActivity(new Intent(UserLogin.this,  GalleryGrid.class));
+        }
 
 
     }
@@ -48,14 +55,7 @@ public class UserLogin extends AppCompatActivity {
         setContentView(R.layout.activity_user_login);
 
 
-        SharedPreferences readPref = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
 
-        String user2 = readPref.getString("userID","");
-        System.out.println(user2);
-        if(!user2.matches("")){
-            userID = user2;
-            startActivity(new Intent(UserLogin.this,  GalleryGrid.class));
-        }
 
 
         // Initialize Firebase Auth

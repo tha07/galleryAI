@@ -207,7 +207,7 @@ public class GalleryGrid extends AppCompatActivity {
                     }*/
                     bitmap.compress(Bitmap.CompressFormat.JPEG, 20, out); // bmp is your Bitmap instance
 
-                    postRequest("http://192.168.1.3:5000/v1/vision/detection",f);
+                    postRequest("http://192.168.1.11:5000/v1/vision/image",f);
 
 
 

@@ -207,7 +207,7 @@ public class GalleryGrid extends AppCompatActivity {
                     }*/
                     bitmap.compress(Bitmap.CompressFormat.JPEG, 20, out); // bmp is your Bitmap instance
 
-                    postRequest("http://192.168.1.11:5000/v1/vision/image",f);
+                    postRequest("http://fdea75b666f3.ngrok.io/v1/vision/image",f);
 
 
 

@@ -15,9 +15,11 @@ import android.content.res.AssetFileDescriptor;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.Matrix;
+import android.hardware.Camera;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraManager;
 import android.media.ExifInterface;
+import android.net.NetworkRequest;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
@@ -33,11 +35,13 @@ import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.BaseAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.GridView;
 import android.widget.ImageView;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -46,6 +50,7 @@ import com.androidnetworking.common.Priority;
 import com.androidnetworking.error.ANError;
 import com.androidnetworking.interfaces.JSONObjectRequestListener;
 import com.androidnetworking.interfaces.UploadProgressListener;
+import com.google.android.gms.common.internal.safeparcel.SafeParcelable;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
@@ -103,6 +108,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -131,6 +137,7 @@ public class GalleryGrid extends AppCompatActivity {
     private  int imageSizeX;
     private  int imageSizeY;
     private  TensorProcessor probabilityProcessor;
+    private String modelLink;
 
     /** Output probability TensorBuffer. */
     private  TensorBuffer outputProbabilityBuffer;
@@ -148,22 +155,42 @@ public class GalleryGrid extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_gallery_grid);
 
-        SharedPreferences sp = getSharedPreferences("lastUser", MODE_PRIVATE);
-        SharedPreferences.Editor editor = sp.edit();
-        editor.putString("userID", userID);
-        editor.apply();
+        theSharedPref();
 
+
+
+        String[] names = new String[]{"MobileNet", "InceptionV3"};
+        String[] arraySpinner = new String[] {
+                "https://5dcea46b9a82.ngrok.io/v1/vision/image", "https://5dcea46b9a82.ngrok.io/v1/vision/image2"};
+        Spinner s = (Spinner) findViewById(R.id.spinner);
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, names);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        s.setAdapter(adapter);
+
+
+        s.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener()
+        {
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id)
+            {
+                modelLink = arraySpinner[position];
+            } // to close the onItemSelected
+            public void onNothingSelected(AdapterView<?> parent)
+            {
+                modelLink = names[s.getSelectedItemPosition()];
+            }
+        });
+
+        System.out.println();
+        android.hardware.Camera.CameraInfo camInfo = new android.hardware.Camera.CameraInfo();
+        Camera.getCameraInfo(1,camInfo);
+        int cameraRotationOffset = camInfo.orientation;
+        System.out.println("CAMOffset: "+cameraRotationOffset);
         androidGridView = findViewById(R.id.gridview_android_example);
         initialReference = FirebaseStorage.getInstance().getReference();
-
         searchField = findViewById(R.id.editTextTextPersonName);
         searchButton = findViewById(R.id.button2);
-
-
-
-
-
         checkifNewUser();
+        //updateImages.start();
         new updateImageViews().execute();
 
         searchButton.setOnClickListener(new View.OnClickListener() {
@@ -175,6 +202,7 @@ public class GalleryGrid extends AppCompatActivity {
 
         });
     }
+
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     @Override
@@ -192,31 +220,20 @@ public class GalleryGrid extends AppCompatActivity {
                 try {
 
                     FileOutputStream out = new FileOutputStream(f);
-                    /*
-                    if(getCameraAngle()==90){
-                        bitmap = rotateBitmap(bitmap,90);
+                    int cameraAngle = getCameraAngle();
+                    Log.d("Camera", String.valueOf(cameraAngle));
+                    if(Build.MANUFACTURER.equals("XIAOMI")||Build.MANUFACTURER.equals("Xiaomi")||Build.MANUFACTURER.equals("Samsung")||Build.MANUFACTURER.equals("SAMSUNG")) {
+                        if(cameraAngle == 180){bitmap = rotateBitmap(bitmap,180);}
+                        else if(cameraAngle == 270){bitmap = rotateBitmap(bitmap,90);}
                     }
-                    else if(getCameraAngle()==180){
-                        bitmap = rotateBitmap(bitmap,180);
-                    }
-                    else if(getCameraAngle()==270){
-                        bitmap = rotateBitmap(bitmap,270);
-                    }
-                    else if(getCameraAngle()==0){
-                        bitmap = rotateBitmap(bitmap,0);
-                    }*/
-                    bitmap.compress(Bitmap.CompressFormat.JPEG, 20, out); // bmp is your Bitmap instance
-
-                    postRequest("http://fdea75b666f3.ngrok.io/v1/vision/image",f);
-
-
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 15, out); // bmp is your Bitmap instance
+                    Log.d("modelLink", modelLink);
+                    postRequest(modelLink,f);
 
                 } catch (IOException e) {
                     e.printStackTrace();
 
                 }
-
-
             } catch (Exception e) {
                 e.printStackTrace();
                 startActivity(new Intent(this, GalleryGrid.class));
@@ -232,11 +249,13 @@ public class GalleryGrid extends AppCompatActivity {
                     File f = createImageFileMultiple(i);
                     Bitmap bitmap = MediaStore.Images.Media.getBitmap(this.getContentResolver(), mItem.getUri());
                     FileOutputStream out = new FileOutputStream(f);
-                    if(getCameraAngle()>0){
-                        bitmap = rotateBitmap(bitmap,90);
+                    int cameraAngle = getCameraAngle();
+                    if(Build.MANUFACTURER.equals("XIAOMI")||Build.MANUFACTURER.equals("Xiaomi")||Build.MANUFACTURER.equals("Samsung")||Build.MANUFACTURER.equals("SAMSUNG")) {
+                        if(cameraAngle == 180){bitmap = rotateBitmap(bitmap,180);}
+                        else if(cameraAngle == 270){bitmap = rotateBitmap(bitmap,90);}
                     }
-                    bitmap.compress(Bitmap.CompressFormat.JPEG, 20, out);
-                    uploadToFirebaseMultiple(Uri.fromFile(f),i);
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 15, out);
+                    postRequest(modelLink,f);
                 }
                 }
                 catch(Exception e){
@@ -244,10 +263,16 @@ public class GalleryGrid extends AppCompatActivity {
                     File f = createImageFile();
                     Bitmap bitmap = MediaStore.Images.Media.getBitmap(this.getContentResolver(), loadURI);
                     FileOutputStream out = new FileOutputStream(f);
-                    bitmap.compress(Bitmap.CompressFormat.JPEG, 20, out);
+                    int cameraAngle = getCameraAngle();
+                    if(Build.MANUFACTURER.equals("XIAOMI")||Build.MANUFACTURER.equals("Xiaomi")||Build.MANUFACTURER.equals("Samsung")||Build.MANUFACTURER.equals("SAMSUNG")) {
+                        if(cameraAngle == 180){bitmap = rotateBitmap(bitmap,180);}
+                        else if(cameraAngle == 270){bitmap = rotateBitmap(bitmap,90);}
 
+                    }
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 15, out);
+                    postRequest(modelLink,f);
 
-                    MappedByteBuffer tfliteModel = FileUtil.loadMappedFile(this, "mobilenet_v1_1.0_224_quant.tflite");
+                    /*MappedByteBuffer tfliteModel = FileUtil.loadMappedFile(this, "mobilenet_v1_1.0_224_quant.tflite");
                     Interpreter tflite = new Interpreter(tfliteModel, tfliteOptions);
                     // Loads labels out from the label file.
                     labels = FileUtil.loadLabels(this, "labels_mobilenet_quant_v1_224.txt");
@@ -282,7 +307,7 @@ public class GalleryGrid extends AppCompatActivity {
                             maxEntry = entry;
                         }
                     }
-                    uploadToFirebase(Uri.fromFile(f), maxEntry.getKey());
+                    uploadToFirebase(Uri.fromFile(f), maxEntry.getKey());*/
                 }
 
             } catch (Exception e) {
@@ -380,6 +405,7 @@ public class GalleryGrid extends AppCompatActivity {
                             imageData.put("label",theKey);
                             addToFirestore(db, generatedLabel, imageData);
                             new updateImageViews().execute();
+                            //updateImages.start();
                             Toast.makeText(getApplicationContext(), "Η εικόνα ανέβηκε με επιτυχία", Toast.LENGTH_SHORT).show();
                             }
                         });
@@ -405,6 +431,7 @@ public class GalleryGrid extends AppCompatActivity {
                         imageData.put("timestamp",timeStamp);
                         addToFirestore(db, generatedLabel, imageData);
                         new updateImageViews().execute();
+                        //updateImages.start();
                         Toast.makeText(getApplicationContext(), "Η εικόνα ανέβηκε με επιτυχία", Toast.LENGTH_SHORT).show();
                     }
                 });
@@ -580,7 +607,7 @@ public class GalleryGrid extends AppCompatActivity {
         CameraManager manager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
         int orientation = 0;
         try{
-            String cameraID = manager.getCameraIdList()[0];
+            String cameraID = manager.getCameraIdList()[1];
             CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraID);
             orientation = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
             System.out.println(orientation);
@@ -651,6 +678,46 @@ public class GalleryGrid extends AppCompatActivity {
                    }
                });
    }
+
+
+    Thread updateImages = new Thread() {
+        @Override
+        public void run() {
+            final FirebaseFirestore db = FirebaseFirestore.getInstance();
+            CollectionReference collRef = db.collection(userID);
+
+            collRef.orderBy("timestamp", Direction.DESCENDING).get().
+                    addOnCompleteListener(
+                            new OnCompleteListener<QuerySnapshot>() {
+                                @Override
+                                public void onComplete(@NonNull Task<QuerySnapshot> task) {
+                                    if (task.isSuccessful()) {
+                                        userLabels.clear();
+                                        userUrls.clear();
+                                        userTimestamps.clear();
+                                        for (QueryDocumentSnapshot document : task.getResult()) {
+                                            userLabels.add(document.getData().get("label").toString());
+                                            userUrls.add(document.getData().get("url").toString());
+                                            userTimestamps.add(document.getData().get("timestamp").toString());
+                                        }
+                                        ImageAdapterGridView adapter = new ImageAdapterGridView(GalleryGrid.this, userUrls.size());
+                                        androidGridView.setAdapter(adapter);
+
+
+                                    } else {
+                                        Log.d("TAG", "No such document");
+                                    }
+                                }
+                            });
+        }
+    };
+
+    private void theSharedPref(){
+        SharedPreferences sp = getSharedPreferences("lastUser", MODE_PRIVATE);
+        SharedPreferences.Editor editor = sp.edit();
+        editor.putString("userID", userID);
+        editor.apply();
+    }
 
 
 }

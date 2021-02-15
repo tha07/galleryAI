@@ -49,15 +49,24 @@
             android:layout_width="match_parent"
             android:layout_height="700dp"
             android:layout_gravity="center"
+            android:layout_marginTop="20dp"
             android:columnWidth="100dp"
             android:gravity="center"
             android:minHeight="90dp"
             android:numColumns="auto_fit"
             android:stretchMode="columnWidth"
-            app:layout_constraintTop_toBottomOf="@+id/editTextTextPersonName"
+            app:layout_constraintTop_toBottomOf="@+id/spinner"
             tools:layout_editor_absoluteX="0dp">
 
         </GridView>
+
+        <Spinner
+            android:id="@+id/spinner"
+            android:layout_width="253dp"
+            android:layout_height="27dp"
+            android:layout_marginTop="20dp"
+            app:layout_constraintStart_toStartOf="@id/editTextTextPersonName"
+            app:layout_constraintTop_toBottomOf="@id/editTextTextPersonName" />
 
 
     </androidx.constraintlayout.widget.ConstraintLayout>

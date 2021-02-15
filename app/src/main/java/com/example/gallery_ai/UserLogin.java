@@ -37,7 +37,7 @@ public class UserLogin extends AppCompatActivity {
     public void onStart() {
         super.onStart();
         // Check if user is signed in (non-null) and update UI accordingly.
-        SharedPreferences readPref = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+        /*SharedPreferences readPref = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
 
         String user2 = readPref.getString("userID","");
         System.out.println(user2);
@@ -45,7 +45,7 @@ public class UserLogin extends AppCompatActivity {
             userID = user2;
             startActivity(new Intent(UserLogin.this,  GalleryGrid.class));
         }
-
+        */
 
     }
 

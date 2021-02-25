@@ -137,12 +137,10 @@ public class GalleryGrid extends AppCompatActivity {
     private  int imageSizeX;
     private  int imageSizeY;
     private  TensorProcessor probabilityProcessor;
-    private String modelLink;
+    private static String modelLink;
 
     /** Output probability TensorBuffer. */
     private  TensorBuffer outputProbabilityBuffer;
-
-
     private EditText searchField;
     private Button searchButton;
 
@@ -156,35 +154,12 @@ public class GalleryGrid extends AppCompatActivity {
         setContentView(R.layout.activity_gallery_grid);
 
         theSharedPref();
+        selectMLModels();
+        //android.hardware.Camera.CameraInfo camInfo = new android.hardware.Camera.CameraInfo();
+        //Camera.getCameraInfo(1,camInfo);
+        //int cameraRotationOffset = camInfo.orientation;
+        //System.out.println("CAMOffset: "+cameraRotationOffset);
 
-
-
-        String[] names = new String[]{"MobileNet", "InceptionV3"};
-        String[] arraySpinner = new String[] {
-                "https://5dcea46b9a82.ngrok.io/v1/vision/image", "https://5dcea46b9a82.ngrok.io/v1/vision/image2"};
-        Spinner s = (Spinner) findViewById(R.id.spinner);
-        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, names);
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        s.setAdapter(adapter);
-
-
-        s.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener()
-        {
-            public void onItemSelected(AdapterView<?> parent, View view, int position, long id)
-            {
-                modelLink = arraySpinner[position];
-            } // to close the onItemSelected
-            public void onNothingSelected(AdapterView<?> parent)
-            {
-                modelLink = names[s.getSelectedItemPosition()];
-            }
-        });
-
-        System.out.println();
-        android.hardware.Camera.CameraInfo camInfo = new android.hardware.Camera.CameraInfo();
-        Camera.getCameraInfo(1,camInfo);
-        int cameraRotationOffset = camInfo.orientation;
-        System.out.println("CAMOffset: "+cameraRotationOffset);
         androidGridView = findViewById(R.id.gridview_android_example);
         initialReference = FirebaseStorage.getInstance().getReference();
         searchField = findViewById(R.id.editTextTextPersonName);
@@ -209,30 +184,25 @@ public class GalleryGrid extends AppCompatActivity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
 
         super.onActivityResult(requestCode, resultCode, data);
-
-
-
         if (requestCode == REQUEST_CODE_CAMERA) {
-
             try {
                 Bitmap bitmap = MediaStore.Images.Media.getBitmap(this.getContentResolver(), photoURI);
                 File f = new File(currentPhotoPath);
                 try {
-
                     FileOutputStream out = new FileOutputStream(f);
                     int cameraAngle = getCameraAngle();
                     Log.d("Camera", String.valueOf(cameraAngle));
-                    if(Build.MANUFACTURER.equals("XIAOMI")||Build.MANUFACTURER.equals("Xiaomi")||Build.MANUFACTURER.equals("Samsung")||Build.MANUFACTURER.equals("SAMSUNG")) {
+                    String manufacturer = Build.MANUFACTURER;
+                    if(manufacturer.equals("XIAOMI")||manufacturer.equals("Xiaomi")||manufacturer.equals("Samsung")||manufacturer.equals("SAMSUNG")) {
                         if(cameraAngle == 180){bitmap = rotateBitmap(bitmap,180);}
                         else if(cameraAngle == 270){bitmap = rotateBitmap(bitmap,90);}
                     }
                     bitmap.compress(Bitmap.CompressFormat.JPEG, 15, out); // bmp is your Bitmap instance
                     Log.d("modelLink", modelLink);
-                    postRequest(modelLink,f);
 
+                    postRequest(modelLink,f);
                 } catch (IOException e) {
                     e.printStackTrace();
-
                 }
             } catch (Exception e) {
                 e.printStackTrace();
@@ -241,7 +211,6 @@ public class GalleryGrid extends AppCompatActivity {
         }
         if (requestCode == PICK_IMAGE) {
             try {
-                //Uri loadURI = data.getData();
                 try{
                 ClipData clipped = data.getClipData();
                 for (int i = 0; i < clipped.getItemCount(); i++) {
@@ -267,7 +236,6 @@ public class GalleryGrid extends AppCompatActivity {
                     if(Build.MANUFACTURER.equals("XIAOMI")||Build.MANUFACTURER.equals("Xiaomi")||Build.MANUFACTURER.equals("Samsung")||Build.MANUFACTURER.equals("SAMSUNG")) {
                         if(cameraAngle == 180){bitmap = rotateBitmap(bitmap,180);}
                         else if(cameraAngle == 270){bitmap = rotateBitmap(bitmap,90);}
-
                     }
                     bitmap.compress(Bitmap.CompressFormat.JPEG, 15, out);
                     postRequest(modelLink,f);
@@ -309,19 +277,15 @@ public class GalleryGrid extends AppCompatActivity {
                     }
                     uploadToFirebase(Uri.fromFile(f), maxEntry.getKey());*/
                 }
-
             } catch (Exception e) {
                 e.printStackTrace();
                 startActivity(new Intent(this, GalleryGrid.class));
             }
-
-
         }
     }
 
     @SuppressLint("QueryPermissionsNeeded")
     private void dispatchTakePictureIntent() {
-
         Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
         if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
             File photoFile = null;
@@ -439,7 +403,6 @@ public class GalleryGrid extends AppCompatActivity {
         }).addOnFailureListener(new OnFailureListener() {
             @Override
             public void onFailure(@NonNull Exception e) { Toast.makeText(getApplicationContext(), "Υπήρξε κάποιο σφάλμα κατά το ανέβασμα της εικόνας", Toast.LENGTH_SHORT).show();
-
             }});
     }
 
@@ -449,7 +412,6 @@ public class GalleryGrid extends AppCompatActivity {
         protected Void doInBackground(Void... voids) {
             final FirebaseFirestore db = FirebaseFirestore.getInstance();
             CollectionReference collRef = db.collection(userID);
-
             collRef.orderBy("timestamp", Direction.DESCENDING).get().
                     addOnCompleteListener(
                             new OnCompleteListener<QuerySnapshot>() {
@@ -466,8 +428,6 @@ public class GalleryGrid extends AppCompatActivity {
                                         }
                                         ImageAdapterGridView adapter = new ImageAdapterGridView(GalleryGrid.this, userUrls.size());
                                         androidGridView.setAdapter(adapter);
-
-
                                     } else {
                                         Log.d("TAG", "No such document");
                                     }
@@ -560,8 +520,6 @@ public class GalleryGrid extends AppCompatActivity {
                                         if(userLabels.size()!=0){
                                         ImageAdapterGridView adapter = new ImageAdapterGridView(GalleryGrid.this, userUrls.size());
                                         androidGridView.setAdapter(adapter);}
-
-
                                     } else {
                                         Log.d("TAG", "No such document");
                                     }
@@ -612,13 +570,10 @@ public class GalleryGrid extends AppCompatActivity {
             orientation = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
             System.out.println(orientation);
             return orientation;
-
         }
         catch(Exception e){
             return orientation;
         }
-
-
     }
 
     public Bitmap rotateBitmap(Bitmap original, float degrees) {
@@ -632,7 +587,6 @@ public class GalleryGrid extends AppCompatActivity {
     private TensorImage loadImage(final Bitmap bitmap, int sensorOrientation) {
         // Loads bitmap into a TensorImage.
         inputImageBuffer.load(bitmap);
-
         // Creates processor for the TensorImage.
         int cropSize = min(bitmap.getWidth(), bitmap.getHeight());
         int numRotation = sensorOrientation / 90;
@@ -650,7 +604,6 @@ public class GalleryGrid extends AppCompatActivity {
     }
 
    public void postRequest(String url, File file){
-
         AndroidNetworking.upload(url)
                .addMultipartFile("image",file)
                .setPriority(Priority.HIGH)
@@ -678,7 +631,6 @@ public class GalleryGrid extends AppCompatActivity {
                    }
                });
    }
-
 
     Thread updateImages = new Thread() {
         @Override
@@ -717,6 +669,29 @@ public class GalleryGrid extends AppCompatActivity {
         SharedPreferences.Editor editor = sp.edit();
         editor.putString("userID", userID);
         editor.apply();
+    }
+
+    private void selectMLModels(){
+        String[] names = new String[]{"MobileNet", "InceptionV3"};
+        String[] arraySpinner = new String[] {
+                "https://5dcea46b9a82.ngrok.io/v1/vision/image", "https://5dcea46b9a82.ngrok.io/v1/vision/image2"};
+        Spinner s = (Spinner) findViewById(R.id.spinner);
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, names);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        s.setAdapter(adapter);
+
+
+        s.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener()
+        {
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id)
+            {
+                modelLink = arraySpinner[position];
+            } // to close the onItemSelected
+            public void onNothingSelected(AdapterView<?> parent)
+            {
+                modelLink = names[s.getSelectedItemPosition()];
+            }
+        });
     }
 
 

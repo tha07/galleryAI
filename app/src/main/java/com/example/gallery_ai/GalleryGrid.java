@@ -200,7 +200,8 @@ public class GalleryGrid extends AppCompatActivity {
                     bitmap.compress(Bitmap.CompressFormat.JPEG, 15, out); // bmp is your Bitmap instance
                     Log.d("modelLink", modelLink);
 
-                    postRequest(modelLink,f);
+                    uploadToFirebase(Uri.fromFile(f), "loading...", f);
+                    //postRequest(modelLink,f);
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
@@ -224,7 +225,8 @@ public class GalleryGrid extends AppCompatActivity {
                         else if(cameraAngle == 270){bitmap = rotateBitmap(bitmap,90);}
                     }
                     bitmap.compress(Bitmap.CompressFormat.JPEG, 15, out);
-                    postRequest(modelLink,f);
+                    //postRequest(modelLink,f);
+                    uploadToFirebase(Uri.fromFile(f), "loading...", f);
                 }
                 }
                 catch(Exception e){
@@ -238,7 +240,12 @@ public class GalleryGrid extends AppCompatActivity {
                         else if(cameraAngle == 270){bitmap = rotateBitmap(bitmap,90);}
                     }
                     bitmap.compress(Bitmap.CompressFormat.JPEG, 15, out);
-                    postRequest(modelLink,f);
+
+                    uploadToFirebase(Uri.fromFile(f), "loading...", f);
+
+                    //MyRunnable myRunnable = new MyRunnable("Hello World");
+                    //new Thread(myRunnable).start();
+                    //postRequest(modelLink,f);
 
                     /*MappedByteBuffer tfliteModel = FileUtil.loadMappedFile(this, "mobilenet_v1_1.0_224_quant.tflite");
                     Interpreter tflite = new Interpreter(tfliteModel, tfliteOptions);
@@ -354,7 +361,7 @@ public class GalleryGrid extends AppCompatActivity {
 
 
 
-    private void uploadToFirebase(final Uri uri, String theKey){
+    private void uploadToFirebase(final Uri uri, String theKey, File postFile){
         @SuppressLint("SimpleDateFormat") final String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
         final StorageReference image = initialReference.child("dogs/"+timeStamp);
         final String generatedLabel = generateLabel(timeStamp);
@@ -368,7 +375,10 @@ public class GalleryGrid extends AppCompatActivity {
                             imageData.put("timestamp",generatedLabel);
                             imageData.put("label",theKey);
                             addToFirestore(db, generatedLabel, imageData);
+
                             new updateImageViews().execute();
+                            MyRunnable myRunnable = new MyRunnable(modelLink,generatedLabel, postFile);
+                            new Thread(myRunnable).start();
                             //updateImages.start();
                             Toast.makeText(getApplicationContext(), "Η εικόνα ανέβηκε με επιτυχία", Toast.LENGTH_SHORT).show();
                             }
@@ -407,7 +417,7 @@ public class GalleryGrid extends AppCompatActivity {
     }
 
     @SuppressLint("StaticFieldLeak")
-    private class updateImageViews extends AsyncTask<Void, Void, Void> {
+    public class updateImageViews extends AsyncTask<Void, Void, Void> {
         @Override
         protected Void doInBackground(Void... voids) {
             final FirebaseFirestore db = FirebaseFirestore.getInstance();
@@ -620,7 +630,7 @@ public class GalleryGrid extends AppCompatActivity {
                        // do anything with response
                        try {
                            JSONObject maxResult = (JSONObject) response.getJSONArray("predictions").get(0);
-                           uploadToFirebase(Uri.fromFile(file), (String) maxResult.get("label"));
+                           uploadToFirebase(Uri.fromFile(file), (String) maxResult.get("label"), file);
                        } catch (JSONException e) {
                            e.printStackTrace();
                        }
@@ -674,7 +684,7 @@ public class GalleryGrid extends AppCompatActivity {
     private void selectMLModels(){
         String[] names = new String[]{"MobileNet", "InceptionV3"};
         String[] arraySpinner = new String[] {
-                "https://5dcea46b9a82.ngrok.io/v1/vision/image", "https://5dcea46b9a82.ngrok.io/v1/vision/image2"};
+                "https://f5c9ae30cada.ngrok.io/v1/vision/image", "https://f5c9ae30cada.ngrok.io/v1/vision/image2"};
         Spinner s = (Spinner) findViewById(R.id.spinner);
         ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, names);
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
@@ -695,6 +705,73 @@ public class GalleryGrid extends AppCompatActivity {
     }
 
 
+
+
+    private class MyRunnable implements Runnable {
+        private volatile String myParam;
+        private volatile String mydocID;
+        private volatile File myFile;
+
+        public MyRunnable(String myParam, String mydocID, File myFile){
+            this.myParam = myParam;
+            this.mydocID = mydocID;
+            this.myFile = myFile;
+        }
+
+        public void postRequest(String url, String documentID, File file){
+            final CollectionReference db = FirebaseFirestore.getInstance().collection(userID);
+            AndroidNetworking.upload(url)
+                    .addMultipartFile("image",file)
+                    .setPriority(Priority.HIGH)
+                    .build()
+                    .setUploadProgressListener(new UploadProgressListener() {
+                        @Override
+                        public void onProgress(long bytesUploaded, long totalBytes) {
+                            // do anything with progress
+                        }
+                    })
+                    .getAsJSONObject(new JSONObjectRequestListener() {
+                        @Override
+                        public void onResponse(JSONObject response) {
+                            // do anything with response
+                            try {
+                                JSONObject maxResult = (JSONObject) response.getJSONArray("predictions").get(0);
+                                db.document(documentID).update("label", maxResult.get("label"))
+                                        .addOnSuccessListener(new OnSuccessListener<Void>() {
+                                            @Override
+                                            public void onSuccess(Void aVoid) {
+                                                Log.d("TAG", "DocumentSnapshot successfully updated!");
+                                                new updateImageViews().execute();
+                                            }
+                                        })
+                                        .addOnFailureListener(new OnFailureListener() {
+                                            @Override
+                                            public void onFailure(@NonNull Exception e) {
+                                                Log.w("TAG", "Error updating document", e);
+                                            }
+                                        });
+
+                                //uploadToFirebase(Uri.fromFile(file), (String) maxResult.get("label"));
+                            } catch (JSONException e) {
+                                e.printStackTrace();
+                            }
+                        }
+                        @Override
+                        public void onError(ANError error) {
+                            // handle error
+                        }
+                    });
+        }
+
+        public void run(){
+            postRequest(myParam,mydocID,myFile);
+
+
+        }
+
+    }
 }
+
+
 
 

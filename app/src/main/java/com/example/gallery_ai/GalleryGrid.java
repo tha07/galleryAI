@@ -361,10 +361,57 @@ public class GalleryGrid extends AppCompatActivity {
 
 
 
-    private void uploadToFirebase(final Uri uri, String theKey, File postFile){
-        @SuppressLint("SimpleDateFormat") final String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
-        final StorageReference image = initialReference.child("dogs/"+timeStamp);
-        final String generatedLabel = generateLabel(timeStamp);
+    
+    private Map.Entry<String,Float> localTensor(Bitmap bitmap) throws IOException {
+        long startTimet = System.nanoTime();
+        MappedByteBuffer tfliteModel = FileUtil.loadMappedFile(this, "resnet_v2_101_29d9.tflite");
+        Interpreter tflite = new Interpreter(tfliteModel, tfliteOptions);
+        // Loads labels out from the label file.
+        labels = FileUtil.loadLabels(this, "labels_mobilenet_quant_v1_224.txt");
+        int imageTensorIndex = 0;
+        int[] imageShape = tflite.getInputTensor(imageTensorIndex).shape(); // {1, height, width, 3}
+        imageSizeY = imageShape[1];
+        imageSizeX = imageShape[2];
+        DataType imageDataType = tflite.getInputTensor(imageTensorIndex).dataType();
+        int probabilityTensorIndex = 0;
+        int[] probabilityShape =
+                tflite.getOutputTensor(probabilityTensorIndex).shape(); // {1, NUM_CLASSES}
+        DataType probabilityDataType = tflite.getOutputTensor(probabilityTensorIndex).dataType();
+
+        // Creates the input tensor.
+        inputImageBuffer = new TensorImage(imageDataType);
+
+        // Creates the output tensor and its processor.
+        outputProbabilityBuffer = TensorBuffer.createFixedSize(probabilityShape, probabilityDataType);
+        probabilityProcessor = new TensorProcessor.Builder().build();
+        inputImageBuffer = loadImage(bitmap,0);
+
+        tflite.run(inputImageBuffer.getBuffer(), outputProbabilityBuffer.getBuffer().rewind());
+        Map<String, Float> labeledProbability =
+                new TensorLabel(labels, probabilityProcessor.process(outputProbabilityBuffer))
+                        .getMapWithFloatValue();
+
+
+        Map.Entry<String, Float> maxEntry = null;
+
+        for (Map.Entry<String, Float> entry : labeledProbability.entrySet())
+        {
+            if (maxEntry == null || entry.getValue().compareTo(maxEntry.getValue()) > 0)
+            {
+                maxEntry = entry;
+            }
+        }
+        long endTimet = System.nanoTime();
+        long duration = endTimet - startTimet;
+        System.out.println("Xronos local TEnsor: "+maxEntry.getKey());
+    return maxEntry;
+    }
+
+    /*private void uploadToFirebase(final Uri uri, String theKey, File postFile, int loop, String generatedLabel){
+
+        final StorageReference image = initialReference.child("dogs/"+generatedLabel);
+        //final String generatedLabel = generateLabel(timeStamp, loop);
+
         image.putFile(uri).addOnSuccessListener(new OnSuccessListener<UploadTask.TaskSnapshot>() {
                     @Override
                     public void onSuccess(UploadTask.TaskSnapshot taskSnapshot) {

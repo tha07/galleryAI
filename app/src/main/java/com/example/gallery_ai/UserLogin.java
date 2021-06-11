@@ -36,17 +36,6 @@ public class UserLogin extends AppCompatActivity {
     @Override
     public void onStart() {
         super.onStart();
-        // Check if user is signed in (non-null) and update UI accordingly.
-        /*SharedPreferences readPref = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
-
-        String user2 = readPref.getString("userID","");
-        System.out.println(user2);
-        if(!user2.matches("")){
-            userID = user2;
-            startActivity(new Intent(UserLogin.this,  GalleryGrid.class));
-        }
-        */
-
     }
 
     @Override
@@ -54,16 +43,10 @@ public class UserLogin extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_user_login);
 
-
-
-
-
         // Initialize Firebase Auth
         emailField = findViewById(R.id.editTextTextEmailAddress);
         passField = findViewById(R.id.editTextTextPassword);
         loginButton = findViewById(R.id.loginButton);
-
-
 
         loginButton.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -72,15 +55,8 @@ public class UserLogin extends AppCompatActivity {
                     getValues();
                     loginUser();
                 }
-
         });
-
-
-
     }
-
-
-
 
     private void getValues() {
         email = emailField.getText().toString();
@@ -102,10 +78,8 @@ public class UserLogin extends AppCompatActivity {
                     editor.putString("userID", userID);
                     editor.commit();
 
-
                     if(user!=null){
                         userCredentials.put(userID,userEmail);
-
                         startActivity(new Intent(UserLogin.this,  GalleryGrid.class));
                     }
                 } else {
@@ -114,5 +88,4 @@ public class UserLogin extends AppCompatActivity {
             }
         });
     }
-
 }

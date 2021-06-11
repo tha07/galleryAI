@@ -143,11 +143,11 @@ import okhttp3.Response;
 public class GalleryGrid extends AppCompatActivity {
     public String currentPhotoPath;
     public static Uri photoURI;
-    private static final int REQUEST_CODE_CAMERA = 1;
-    public static final int PICK_IMAGE = 2;
-    public static List<String> userUrls = new ArrayList<>();
-    public static List<String> userLabels = new ArrayList<>();
-    public static List<String> userTimestamps = new ArrayList<>();
+    private static final int REQUEST_CODE_CAMERA = 1; // Κωδικός επιλογής κάμερας
+    public static final int PICK_IMAGE = 2; // Κωδικός επιλογής αποθηκευμένης εικόνας
+    public static List<String> userUrls = new ArrayList<>(); // Χρήση Arraylist για φόρτωση Urls των εικόνων απο το Firebase
+    public static List<String> userLabels = new ArrayList<>(); // Χρήση Arraylist για φόρτωση Label των εικόνων απο το Firebase
+    public static List<String> userTimestamps = new ArrayList<>(); //Χρήση Arraylist για φόρτωση Timestamp εικόνων απο το Firebase
     public static List<Uri> allUris = new ArrayList<>();
     public static Map<String, Object> imageData = new HashMap<>();
     public static Map<String, Object> dummyHash = new HashMap<>();
@@ -157,10 +157,12 @@ public class GalleryGrid extends AppCompatActivity {
     private  int imageSizeX;
     private  int imageSizeY;
     private  TensorProcessor probabilityProcessor;
-    private static String modelLink;
+    private static String modelLink; //
     private static int offlineMode;
-    private static String theAddress =  "http://192.168.2.40:8000";
-
+    private static String theAddress =  "http://192.168.2.40:8000"; // IP:PORT Server Ταξινόμησης
+    String[] names = new String[]{"MobileNet", "ResNet", "VGGNet", "EfficientNet", "NasNet", "XceptionNet","EfficientB7"};
+    String[] arraySpinner = new String[] {
+            "/v1/vision/mobileNet2", "/v1/vision/resNet","/v1/vision/vggNet","/v1/vision/efficientNet","/v1/vision/nasNet","/v1/vision/xceptionNet","/v1/vision/efficientNetB7"};
 
     /** Output probability TensorBuffer. */
     private  TensorBuffer outputProbabilityBuffer;
@@ -653,38 +655,6 @@ public class GalleryGrid extends AppCompatActivity {
         return imageProcessor.process(inputImageBuffer);
     }
 
-
-    Thread updateImages = new Thread() {
-        @Override
-        public void run() {
-            CollectionReference collRef = db.collection(userID);
-            collRef.orderBy("timestamp", Direction.DESCENDING).get().
-                    addOnCompleteListener(
-                            new OnCompleteListener<QuerySnapshot>() {
-                                @Override
-                                public void onComplete(@NonNull Task<QuerySnapshot> task) {
-                                    if (task.isSuccessful()) {
-                                        userLabels.clear();
-                                        userUrls.clear();
-                                        userTimestamps.clear();
-                                        for (QueryDocumentSnapshot document : task.getResult()) {
-                                            userLabels.add(document.getData().get("label").toString());
-                                            userUrls.add(document.getData().get("url").toString());
-                                            userTimestamps.add(document.getData().get("timestamp").toString());
-                                        }
-                                        ImageAdapterGridView adapter = new ImageAdapterGridView(GalleryGrid.this, userUrls.size());
-                                        androidGridView.setAdapter(adapter);
-
-
-                                    } else {
-                                        Log.d("TAG", "No such document");
-                                    }
-                                }
-                            });
-        }
-    };
-
-
     private void theSharedPref(){
         SharedPreferences sp = getSharedPreferences("lastUser", MODE_PRIVATE);
         SharedPreferences.Editor editor = sp.edit();
@@ -693,18 +663,10 @@ public class GalleryGrid extends AppCompatActivity {
     }
 
     private void selectMLModels(){
-        //String address = "http://070fb1fe387b.ngrok.io";
-        String address = "http://192.168.2.40:8000";
-        //String address = "http://147.102.9.93:5000";
-        //String address = "http://147.102.9.97:5000";
-        String[] names = new String[]{"MobileNet", "ResNet", "VGGNet", "EfficientNet", "NasNet", "XceptionNet","EfficientB7"};
-        String[] arraySpinner = new String[] {
-                "/v1/vision/mobileNet2", "/v1/vision/resNet","/v1/vision/vggNet","/v1/vision/efficientNet","/v1/vision/nasNet","/v1/vision/xceptionNet","/v1/vision/efficientNetB7"};
-        Spinner s = (Spinner) findViewById(R.id.spinner);
+        Spinner s = findViewById(R.id.spinner);
         ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, names);
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         s.setAdapter(adapter);
-
 
         s.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener()
         {
@@ -718,33 +680,6 @@ public class GalleryGrid extends AppCompatActivity {
             }
         });
     }
-
-    /*private void offlineMode(){
-        String[] status = new String[]{"On", "Off"};
-        Spinner s1 = (Spinner) findViewById(R.id.spinner2);
-        ArrayAdapter<String> adapter2 = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, status);
-        adapter2.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        s1.setAdapter(adapter2);
-
-        s1.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener()
-        {
-            public void onItemSelected(AdapterView<?> parent, View view, int position, long id)
-            {
-                if(position==0){
-                    offlineMode = 0;
-                }
-                else{
-                    offlineMode = 1;
-                }
-
-            } // to close the onItemSelected
-            public void onNothingSelected(AdapterView<?> parent)
-            {
-                offlineMode = 0;
-            }
-        });
-
-    }*/
 
     private class MyRunnable implements Runnable {
         private volatile String myParam;
@@ -919,8 +854,6 @@ public class GalleryGrid extends AppCompatActivity {
         }
     }
 
-
-
     private class firebaseUpload implements Runnable {
         private volatile Uri uri;
         private volatile String theKey;
@@ -971,30 +904,7 @@ public class GalleryGrid extends AppCompatActivity {
                                 } catch (IOException e) {
                                     e.printStackTrace();
                                 }
-                            /*try {
-                                db.collection(userID).document(genLabel).update("label",localTensor(bitmap).getKey())
-                                        .addOnSuccessListener(new OnSuccessListener<Void>() {
-                                            @Override
-                                            public void onSuccess(Void aVoid) {
-                                                new updateImageViews().execute();
-                                            }
-                                        })
-                                        .addOnFailureListener(new OnFailureListener() {
-                                            @Override
-                                            public void onFailure(@NonNull Exception e) {
-                                            }
-                                        });
-                            } catch (IOException e) {
-                                e.printStackTrace();
-                            }*/}
-
-
-                            //offlineTensor myTensor = new offlineTensor(bitmap, genLabel);
-                            //new Thread(myTensor).start();
-                            //updateImages.start();
-                            //MyRunnable theRunnable = new MyRunnable(modelLink, genLabel,myFile);
-                            //new Thread(theRunnable).start();
-                            //new updateImageViews().execute();
+                           }
                             Toast.makeText(getApplicationContext(), "Η εικόνα ανέβηκε με επιτυχία", Toast.LENGTH_SHORT).show();
                         }
                     });
@@ -1011,43 +921,6 @@ public class GalleryGrid extends AppCompatActivity {
         }
     }
 
-    private class offlineTensor implements Runnable {
-        private volatile Bitmap bitmap;
-        private volatile String genLabel;
-
-
-        public offlineTensor(Bitmap bitmap, String genLabel){
-            this.bitmap = bitmap;
-            this.genLabel = genLabel;
-
-        }
-
-        public void doSmth(String classification, String genLabel) throws IOException {
-
-            db.collection(userID).document(genLabel).update("label",classification)
-                    .addOnSuccessListener(new OnSuccessListener<Void>() {
-                        @Override
-                        public void onSuccess(Void aVoid) {
-                        }
-                    })
-                    .addOnFailureListener(new OnFailureListener() {
-                        @Override
-                        public void onFailure(@NonNull Exception e) {
-                        }
-                    });
-            new updateImageViews().execute();
-        }
-
-        public void run(){
-            try {
-                String classification = localTensor(bitmap).getKey();
-                doSmth(classification,genLabel);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     public Bitmap fixImage(Bitmap bitmap){
         int cameraAngle = getCameraAngle();
@@ -1059,74 +932,15 @@ public class GalleryGrid extends AppCompatActivity {
     }return bitmap;
 }
 
-    private class closeitAll implements Runnable {
-        private volatile ClipData.Item mItem;
-        private volatile int i;
-        private volatile String timeStamp;
-        private volatile long startTimeBatch;
-
-
-        public closeitAll(ClipData.Item mItem, int i, String timeStamp, long startTimeBatch){
-            this.mItem = mItem;
-            this.i = i;
-            this.timeStamp = timeStamp;
-            this.startTimeBatch = startTimeBatch;
-        }
-
-        @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-        public void doSmth(ClipData.Item mItem, int i, String timeStamp, long startTimeBatch) throws IOException {
-            File f = createImageFileMultiple(i);
-            //long startTimet = System.nanoTime();
-            long first = System.nanoTime();
-            File f2 = new File(currentPhotoPath+i);
-            Bitmap bitmap2 = getBitmapFormUri(GalleryGrid.this, mItem.getUri(),224,224);
-            FileOutputStream out2 = new FileOutputStream(f2);
-            bitmap2 = fixImage(bitmap2);
-
-
-            if(offlineMode==0) {
-                bitmap2 = Bitmap.createScaledBitmap(bitmap2, 224, 224, false);
-                bitmap2.compress(Bitmap.CompressFormat.JPEG, 100, out2);
-                Log.d("EKkinhsh sympieshs: ", String.valueOf(first));
-                Log.d("Lhxh sympieshs: ", String.valueOf(System.nanoTime()));
-                System.out.println("HElllo");
-                String genLabel = generateLabel(timeStamp,i);
-                dummyHash.put("timestamp", genLabel);
-                //addToFirestore(db,genLabel,dummyHash);
-
-                MyRunnable theRunnable = new MyRunnable(modelLink, genLabel, f2, startTimeBatch, i);
-                new Thread(theRunnable).start();
-            }
-            /*Bitmap bitmap = getBitmapFormUri(GalleryGrid.this, mItem.getUri(), 1000,500);
-            FileOutputStream out = new FileOutputStream(f);
-            //bitmap = fixImage(bitmap);
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 25, out);
-
-
-            firebaseUpload fbupload = new firebaseUpload(Uri.fromFile(f), "loading...", genLabel, f, bitmap);
-            new Thread(fbupload).start();*/
-
-        }
-
-        @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-        public void run(){
-            try {
-                doSmth(mItem, i, timeStamp,startTimeBatch);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
     private class closeitAll2 implements Runnable {
         private volatile ClipData mItem;
         private volatile int i;
         private volatile String timeStamp;
         private volatile long startTimeBatch;
-        private volatile  List< File > FOTO = new ArrayList<>();
-        private volatile List< File > filesOne = new ArrayList<>();
-        private volatile ArrayList<String> genLabels = new ArrayList<>();
-        private volatile ArrayList<Integer> orderNums = new ArrayList<>();
+        private volatile  List< File > FOTO;
+        private volatile List< File > filesOne;
+        private volatile ArrayList<String> genLabels;
+        private volatile ArrayList<Integer> orderNums;
 
 
 
@@ -1146,9 +960,6 @@ public class GalleryGrid extends AppCompatActivity {
         @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
         public void doSmth(ClipData mItem, String timeStamp, long startTimeBatch, int i, List<File> FOTO, List<File> filesOne, ArrayList<String> genLabels,  ArrayList<Integer> orderNums) throws IOException {
 
-            //long startTimet = System.nanoTime();
-            long first = System.nanoTime();
-
             File f = createImageFileMultiple(i);
             File f2 = new File(currentPhotoPath+i);
             Bitmap bitmap2 = getBitmapFormUri(GalleryGrid.this, mItem.getItemAt(i).getUri(),224,224);
@@ -1157,9 +968,6 @@ public class GalleryGrid extends AppCompatActivity {
             if(offlineMode==0) {
                 bitmap2 = Bitmap.createScaledBitmap(bitmap2, 331, 331, true);
                 bitmap2.compress(Bitmap.CompressFormat.JPEG, 25, out2);
-                //Log.d("EKkinhsh sympieshs: ", String.valueOf(first));
-                //Log.d("Lhxh sympieshs: ", String.valueOf(System.nanoTime()));
-                //System.out.println("HElllo");
                 String genLabel = generateLabel(timeStamp,i);
                 dummyHash.put("timestamp", genLabel);
                 addToFirestore(db,genLabel,dummyHash);
@@ -1173,8 +981,6 @@ public class GalleryGrid extends AppCompatActivity {
             }
 
             if(FOTO.size()== mItem.getItemCount()){
-                long sympiesh = System.nanoTime() - first;
-           // Log.d("Xronos sympieshs", String.valueOf((System.nanoTime() - first)/1000000000.00));
                 Map<Integer, File> map = new HashMap<Integer, File>();
                 Map<Integer, File> map2 = new HashMap<Integer, File>();
                 Map<Integer, String> map3 = new HashMap<Integer, String>();
@@ -1194,9 +1000,6 @@ public class GalleryGrid extends AppCompatActivity {
                     filesOne.add(map2.get(orderNums.get(l)));
                     genLabels.add(map3.get(orderNums.get(l)));
                 }
-
-
-
 
             long second = System.nanoTime();
                 final double[] delay = new double[1];
@@ -1226,7 +1029,7 @@ public class GalleryGrid extends AppCompatActivity {
                         .getAsJSONObject(new JSONObjectRequestListener() {
                             @Override
                             public void onResponse(JSONObject response) {
-                                //Log.d("Xronos delay", String.valueOf(((System.nanoTime() - delay[0])/1000000000.00)));
+
                                 // do anything with response
                                 try {
                                     double theAnswer = (double) (System.nanoTime()/1000000000.00);
@@ -1253,17 +1056,8 @@ public class GalleryGrid extends AppCompatActivity {
                                                     }
                                                 });
                                     }
-                                    System.out.println(genLabels);
-                                    long firebaseTime =  System.nanoTime() - startingUpdateTime;
-                                    long synolikos = System.nanoTime() - startTimeBatch;
-                                    Log.d("Xronos sto firebase...", String.valueOf((System.nanoTime() - startingUpdateTime)/1000000000.00));
-                                    Log.d("ola", (sympiesh/1000000000.00)+","+anevasma[0]/1000000000.00+","+times.get(0)+","+times.get(1)+","+firebaseTime/1000000000.00+","+ synolikos/1000000000.00);
-                                    System.out.println("ola: "+(sympiesh/1000000000.00)+","+anevasma[0]/1000000000.00+","+times.get(0)+","+times.get(1)+","+firebaseTime/1000000000.00+","+ synolikos/1000000000.00);
-
-
                                     new updateImageViews().execute();
 
-                                    //uploadToFirebase(Uri.fromFile(file), (String) maxResult.get("label"));
                                 } catch (JSONException e) {
                                     e.printStackTrace();
                                 }
@@ -1273,12 +1067,11 @@ public class GalleryGrid extends AppCompatActivity {
                                 // handle error
                             }
                         });
-                //new updateImageViews().execute();
 
             for(int j=0;j<genLabels.size();j++){
                 Bitmap bitmap = getBitmapFormUri(GalleryGrid.this, mItem.getItemAt(j).getUri(), 1000,500);
                 FileOutputStream out = new FileOutputStream(filesOne.get(j));
-                //bitmap = fixImage(bitmap);
+
                 bitmap.compress(Bitmap.CompressFormat.JPEG, 25, out);
                 firebaseUpload fbupload = new firebaseUpload(Uri.fromFile(filesOne.get(j)), "loading...", genLabels.get(j), filesOne.get(j), bitmap);
                 new Thread(fbupload).start();
@@ -1293,14 +1086,6 @@ public class GalleryGrid extends AppCompatActivity {
                 //new Thread(theRunnable).start();
             }
         }
-            /*Bitmap bitmap = getBitmapFormUri(GalleryGrid.this, mItem.getUri(), 1000,500);
-            FileOutputStream out = new FileOutputStream(f);
-            //bitmap = fixImage(bitmap);
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 25, out);
-
-
-            firebaseUpload fbupload = new firebaseUpload(Uri.fromFile(f), "loading...", genLabel, f, bitmap);
-            new Thread(fbupload).start();*/
 
 
 

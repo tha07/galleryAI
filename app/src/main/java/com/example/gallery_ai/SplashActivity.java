@@ -46,7 +46,6 @@ public class SplashActivity extends AppCompatActivity {
                 }
             }, TIME_OUT);
         }
-
     else {
             new Handler().postDelayed(new Runnable() {
                 @Override

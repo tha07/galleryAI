@@ -141,62 +141,55 @@ import okhttp3.Response;
 
 
 public class GalleryGrid extends AppCompatActivity {
-    public String currentPhotoPath;
-    public static Uri photoURI;
+    public String currentPhotoPath; // Τρέχοντας προορισμός εικόνας στη συσκευή
+    public static Uri photoURI; // URI αποθήκευσης εικόνας στη συσκευή
     private static final int REQUEST_CODE_CAMERA = 1; // Κωδικός επιλογής κάμερας
     public static final int PICK_IMAGE = 2; // Κωδικός επιλογής αποθηκευμένης εικόνας
     public static List<String> userUrls = new ArrayList<>(); // Χρήση Arraylist για φόρτωση Urls των εικόνων απο το Firebase
     public static List<String> userLabels = new ArrayList<>(); // Χρήση Arraylist για φόρτωση Label των εικόνων απο το Firebase
     public static List<String> userTimestamps = new ArrayList<>(); //Χρήση Arraylist για φόρτωση Timestamp εικόνων απο το Firebase
-    public static List<Uri> allUris = new ArrayList<>();
-    public static Map<String, Object> imageData = new HashMap<>();
-    public static Map<String, Object> dummyHash = new HashMap<>();
-    private List<String> labels;
-    private final Interpreter.Options tfliteOptions = new Interpreter.Options();
-    private TensorImage inputImageBuffer;
-    private  int imageSizeX;
-    private  int imageSizeY;
-    private  TensorProcessor probabilityProcessor;
-    private static String modelLink; //
-    private static int offlineMode;
+    public static Map<String, Object> dummyHash = new HashMap<>(); // HashMap για αποστολή σε κενό γι
+    private static String modelLink; // Μεταβλητή για το τελικό url που θα αποσταλεί το αρχείο εικόνων
     private static String theAddress =  "http://192.168.2.40:8000"; // IP:PORT Server Ταξινόμησης
-    String[] names = new String[]{"MobileNet", "ResNet", "VGGNet", "EfficientNet", "NasNet", "XceptionNet","EfficientB7"};
+    private int offlineMode = 0;
     String[] arraySpinner = new String[] {
-            "/v1/vision/mobileNet2", "/v1/vision/resNet","/v1/vision/vggNet","/v1/vision/efficientNet","/v1/vision/nasNet","/v1/vision/xceptionNet","/v1/vision/efficientNetB7"};
+            "/v1/vision/mobileNet2", "/v1/vision/resNet","/v1/vision/vggNet","/v1/vision/efficientNet","/v1/vision/nasNet","/v1/vision/xceptionNet","/v1/vision/efficientNetB7"}; //Τα link για κάθε μοντέλο στον Server Ταξινόμησης
+    String[] names = new String[]{"MobileNet", "ResNet", "VGGNet", "EfficientNet", "NasNet", "XceptionNet","EfficientB7"}; //Οι ονομασίες κάθε μοντέλου αντίστοιχα
 
     /** Output probability TensorBuffer. */
-    private  TensorBuffer outputProbabilityBuffer;
-    private EditText searchField;
-    private Button searchButton;
+    //private  TensorBuffer outputProbabilityBuffer;
+    private EditText searchField; // Ορισμός μεταβλητης για το πεδίο αναζήτησης
+    private Button searchButton; // Ορισμός μεταβλητης για το κουμπί αναζήτησης
 
-    StorageReference initialReference;
-    GridView androidGridView;
-    final FirebaseFirestore db = FirebaseFirestore.getInstance();
+    StorageReference initialReference; // Μεταβλητή που αναφέρεται στο Firebase Storage
+    GridView androidGridView; // Ορισμός μεταβλητής GridView
+    final FirebaseFirestore db = FirebaseFirestore.getInstance(); // Τελική μεταβλητή που αναφέρεται στο FireStore
 
 
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
+    protected void onCreate(Bundle savedInstanceState) { // Συνάρτηση δημιουργίας του Activity GalleryGrid
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_gallery_grid);
-        theSharedPref();
-        selectMLModels();
+        setContentView(R.layout.activity_gallery_grid); // Χρήση του activity_gallery_grid για τη δημιουργία γραφικών
+        theSharedPref(); // Συνάρτηση Ελέγχου προτίτερης (εαν δεν έχει αποσυνδεθεί) σύνδεσης χρήστη μέσω της εφαρμογής
+        selectMLModels(); // Επιλογή μοντέλου Machine Learning για την Ταξινόμηση Φωτογραφιών
         //offlineMode();
 
-        dummyHash.put("url","loading...");
-        //dummyHash.put("timestamp","loading");
+        dummyHash.put("url","loading..."); // Χρήση placeholder Hashmap για τις τιμές url, label μέχρι την φόρτωση των πραγματικών για τα πεδία του FireStore
         dummyHash.put("label","loading");
 
-        androidGridView = findViewById(R.id.gridview_android_example);
-        initialReference = FirebaseStorage.getInstance().getReference();
+        androidGridView = findViewById(R.id.gridview_android_example);  // Σύνδεση μεταβλητών με το xml αρχείο γραφικών
         searchField = findViewById(R.id.editTextTextPersonName);
         searchButton = findViewById(R.id.button2);
-        checkifNewUser();
-        //updateImages.start();
-        new updateImageViews().execute();
+
+        initialReference = FirebaseStorage.getInstance().getReference(); // Μεταβλητή αναφοράς στο Firebase Storage
+
+        checkifNewUser(); // Έλεγχος νέου χρήστη
+        new updateImageViews().execute(); // Εμφάνιση Ταξινομημένων εικόνων συνδεδεμένου χρήστη
+
         searchButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                searchLabels(searchField.getText().toString());
+                searchLabels(searchField.getText().toString()); // Αναζήτηση στο GridView
             }
         });
     }
@@ -207,118 +200,110 @@ public class GalleryGrid extends AppCompatActivity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
 
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == REQUEST_CODE_CAMERA) {
+        if (requestCode == REQUEST_CODE_CAMERA) { // Ενέργεια έπειτα απο δημιουργία φωτογραφίας
             try {
-                File f = new File(currentPhotoPath);
-                File f2 = new File(currentPhotoPath+1);
+                // Δημιουργία δύο αρχείων
+                File fileStorage = new File(currentPhotoPath); // Αρχείο για μεταφόρτωση στο Firebase Storage
+                File fileFireStore = new File(currentPhotoPath+1); // Αρχείο για μεταφόρτωση στο Server Ταξινόμησης
                 try {
-                    Bitmap bitmap = getBitmapFormUri(GalleryGrid.this, photoURI, 1000,500);
-                    Bitmap bitmap2 = getBitmapFormUri(GalleryGrid.this, photoURI, 331,331);
-                    FileOutputStream out = new FileOutputStream(f);
-                    FileOutputStream out2 = new FileOutputStream(f2);
-                    bitmap = fixImage(bitmap);
-                    //bitmap2 = fixImage(bitmap2);
-                    //bitmap = Bitmap.createScaledBitmap(bitmap,224, 224,true);
-                    bitmap.compress(Bitmap.CompressFormat.JPEG, 25, out); // bmp is your Bitmap instance
-                    Log.d("modelLink", modelLink);
-                    @SuppressLint("SimpleDateFormat") final String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
-                    String genLabel = generateLabel(timeStamp,0);
-                    dummyHash.put("timestamp", genLabel);
-                    addToFirestore(db,genLabel,dummyHash);
+                    Bitmap bitmapStorage = getBitmapFormUri(GalleryGrid.this, photoURI, 1000,500); // Κλιμάκωση αρχείου Firebase Storage και επιστροφή σε bitmap
+                    Bitmap bitmapFireStore = getBitmapFormUri(GalleryGrid.this, photoURI, 331,331); // Κλιμάκωση αρχείου Server Ταξινόμησης και επιστροφή σε bitmap
+                    FileOutputStream out = new FileOutputStream(fileStorage); // Ροή εξόδου του Bitmap στο αρχείο του Firebase Storage
+                    FileOutputStream out2 = new FileOutputStream(fileFireStore); // Ροη εξόδου του Bitmao στο αρχείο του Server Ταξινόμησης
+                    bitmapStorage = fixImage(bitmapStorage); // Διόρθωση σε τυχόν θέμα γωνίας αποθήκευσης φωτογραφίας
+                    bitmapStorage.compress(Bitmap.CompressFormat.JPEG, 25, out); // Αποθήκευση αλλαγών στο αρχείο του Firebase Storage
+
+                    @SuppressLint("SimpleDateFormat") final String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()); // Δημιουργία timestamp για την εικόνα
+                    String genLabel = generateLabel(timeStamp,0); // Δημιουργία μοναδικού timestamp για την εικόνα ώστε να αποθηκευτεί μοναδικά στο FireStore αλλά και στο Firebase Storage
+                    dummyHash.put("timestamp", genLabel); // Προσθήκη στο Hashmap
+                    addToFirestore(db,genLabel,dummyHash); // Αποστολή στο FireStore
 
 
-                    firebaseUpload fbupload = new firebaseUpload(Uri.fromFile(f), "loading...", genLabel, f, bitmap);
-                    new Thread(fbupload).start();
+                    firebaseUpload fbupload = new firebaseUpload(Uri.fromFile(fileStorage), "loading...", genLabel, fileStorage, bitmapStorage); // Thread για upload εικόνας στο Firebase Storage
+                    new Thread(fbupload).start(); // Εκκίνηση του Thread upload εικόνας στο Firebase Storage
 
                     if(offlineMode==0){
-                        bitmap2 = Bitmap.createScaledBitmap(bitmap2,224, 224,true);
-                        bitmap2.compress(Bitmap.CompressFormat.JPEG, 100, out2);
+                        bitmapFireStore = Bitmap.createScaledBitmap(bitmapFireStore,224, 224,true); // Κλιμάκωση ξανά (ίσως αφαιρεθεί)
+                        bitmapFireStore.compress(Bitmap.CompressFormat.JPEG, 100, out2); // Αποθήκευση αλλαγών στο αρχείο αποστολής στο Server Ταξινόμησης
 
-                        MyRunnable theRunnable = new MyRunnable(modelLink, genLabel,f2,1231231, 0);
-                        new Thread(theRunnable).start();
+                        MyRunnable theRunnable = new MyRunnable(modelLink, genLabel,fileFireStore,1231231, 0); // Thread για upload εικόνας στο Server Ταξινόμησης
+                        new Thread(theRunnable).start(); // Εκκίνηση του Thread upload εικόνας στο Server Ταξινόμησης
                     }
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
             } catch (Exception e) {
                 e.printStackTrace();
-                startActivity(new Intent(this, GalleryGrid.class));
+                startActivity(new Intent(this, GalleryGrid.class)); // Σε περίπτωση προβλήματος επιστροφή στη βασική οθόνη της εφαρμογής (πλέγμα εικόνων)
             }
         }
-        if (requestCode == PICK_IMAGE) {
+        if (requestCode == PICK_IMAGE) { // Φόρτωση αποθηκευμένης εικόνας
             try {
                 try{
-
-                ClipData clipped = data.getClipData();
-                if(clipped.getItemCount() == 1){throw new Exception();}
-                    @SuppressLint("SimpleDateFormat") final String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+                ClipData clipped = data.getClipData(); // Διαχωρισμός πολλαπλών uri εικόνων
+                if(clipped.getItemCount() == 1){throw new Exception();} // Εαν είναι μία εικόνα δημιουργία exeption error για διαφιρετική διαχείριση
+                    @SuppressLint("SimpleDateFormat") final String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()); // Δημιουργία timestamp για τις εικόνες
                     long startTimeBatch = System.nanoTime();
-                    //closeitAll2 theClose = new closeitAll2(clipped,timeStamp, startTimeBatch);
-                    //new Thread(theClose).start();
                     List< File > FOTO = new ArrayList<>();
                     List< File > filesOne = new ArrayList<>();
                    ArrayList<String> genLabels = new ArrayList<>();
                     ArrayList<Integer> orderNums = new ArrayList<>();
                 for (int i = 0; i < clipped.getItemCount(); i++) {
-                    closeitAll2 theClose = new closeitAll2(clipped,timeStamp, startTimeBatch, i, FOTO, filesOne, genLabels, orderNums);
-                    new Thread(theClose).start();
-                    //closeitAll theClose = new closeitAll(clipped.getItemAt(i), i, timeStamp, startTimeBatch);
-                   // new Thread(theClose).start();
+                    closeitAll2 theClose = new closeitAll2(clipped,timeStamp, startTimeBatch, i, FOTO, filesOne, genLabels, orderNums); // Thread για upload εικόνων
+                    new Thread(theClose).start(); // Εκκίνηση Thread
+
                 }
                 }
                 catch(Exception e){
-                    //long startTimet = System.nanoTime();
-                    Uri loadURI = data.getData();
-                    File f = createImageFile();
 
-                    FileOutputStream out = new FileOutputStream(f);
-                    Bitmap bitmap = getBitmapFormUri(GalleryGrid.this, loadURI, 1000,500);
-                    bitmap = fixImage(bitmap);
-                    bitmap.compress(Bitmap.CompressFormat.JPEG, 25, out);
+                    Uri loadURI = data.getData(); // Τοποθεσία εικόνας στη συσκευή
+                    File f = createImageFile(); // Δημιουργία αρχείου για εικόνα που επιλέχθηκε για ταξινόμηση
 
-                    @SuppressLint("SimpleDateFormat") final String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
-                    String genLabel = generateLabel(timeStamp,0);
-                    dummyHash.put("timestamp", genLabel);
-                    addToFirestore(db, genLabel, dummyHash);
+                    FileOutputStream out = new FileOutputStream(f); // Ροή αρχείου
+                    Bitmap bitmap = getBitmapFormUri(GalleryGrid.this, loadURI, 1000,500); // Κλιμάκωση εικόνας και δημιουργία bitmap
+                    bitmap = fixImage(bitmap); // Διόρθωση γωνίας αποθήκευσης εικόνας
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 25, out); // Συμπίεση εικόνας που επιλέχθηκε για ταξινόμηση
 
-                    firebaseUpload fbupload = new firebaseUpload(Uri.fromFile(f), "loading...", genLabel, f, bitmap);
-                    new Thread(fbupload).start();
+                    @SuppressLint("SimpleDateFormat") final String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()); // Δημιουργία timestamp
+                    String genLabel = generateLabel(timeStamp,0); // Δημιουργία label ια το FireStore
+                    dummyHash.put("timestamp", genLabel); // Προσθήκη στο Hashmap
+                    addToFirestore(db, genLabel, dummyHash); // Αποστολή στο FireStore
+
+                    firebaseUpload fbupload = new firebaseUpload(Uri.fromFile(f), "loading...", genLabel, f, bitmap); // Thread για upload εικόνας στο Firebase Storage
+                    new Thread(fbupload).start(); // Εκκίνηση Thread
 
                     if(offlineMode==0){
                         long startTimet = System.nanoTime();
-                        File f2 = new File(currentPhotoPath+1);
-                        FileOutputStream out2 = new FileOutputStream(f2);
-                        //long startTimet = System.nanoTime();
-                        Bitmap bitmap2 = getBitmapFormUri(GalleryGrid.this, loadURI, 331,331);
-                        bitmap2 = fixImage(bitmap2);
-                        bitmap2 = Bitmap.createScaledBitmap(bitmap2,331, 331,true);
-                        long resizingt = System.nanoTime();
-                        bitmap2.compress(Bitmap.CompressFormat.JPEG, 35, out2);
-                        long compressiont = System.nanoTime();
+                        File f2 = new File(currentPhotoPath+1); // Δημιουργία αρχείου για αποστολή σε Server Ταξινόμησης
+                        FileOutputStream out2 = new FileOutputStream(f2); // Δημιουργία ροής για το αρχείο
 
-                        //System.out.println("xronos resize:"+(resizingt-startTimet)/1000000000.00);
-                        Log.d("xronos resizecomp:", String.valueOf(((compressiont-startTimet)/1000000000.00)));
-                        multipleMLUpload mutlipleML = new multipleMLUpload(modelLink, genLabel,f2, startTimet, 0);
-                        new Thread(mutlipleML).start();
+                        Bitmap bitmap2 = getBitmapFormUri(GalleryGrid.this, loadURI, 331,331); // Κλιμάκωση εικόνας και επιστροφή σε bitmap
+                        bitmap2 = fixImage(bitmap2); // Διόρθωση γωνίας αποθήκευσης εικόνας
+                        bitmap2 = Bitmap.createScaledBitmap(bitmap2,331, 331,true); // Κλιμάκωση εικόνας ξανά (διόθωση)
+                        bitmap2.compress(Bitmap.CompressFormat.JPEG, 35, out2); // Συμπίεση εικόνας
 
+                        MyRunnable theRunnable = new MyRunnable(modelLink, genLabel,f2,1231231, 0); // Thread για upload εικόνας στο Server Ταξινόμησης
+                        new Thread(theRunnable).start(); // Εκκίνηση του Thread upload εικόνας στο Server Ταξινόμησης
+
+                        //multipleMLUpload mutlipleML = new multipleMLUpload(modelLink, genLabel,f2, startTimet, 0); // Thread για upload εικόνας στον server Ταξινόμησης
+                        //new Thread(mutlipleML).start(); // Εκκίνηση Thread
                     }
-                    //offlineTensor classifyImages = new offlineTensor(bitmap,genLabel);
-                    //new Thread(classifyImages).start();
+
                 }
             } catch (Exception e) {
                 e.printStackTrace();
-                startActivity(new Intent(this, GalleryGrid.class));
+                startActivity(new Intent(this, GalleryGrid.class)); // Επιστροφή στην κύρια οθόνη σε περίπτωση λάθους
             }
         }
     }
 
     @SuppressLint("QueryPermissionsNeeded")
     private void dispatchTakePictureIntent() {
-        Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+        Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE); // Intent για λειτουργία φωτογραφίας
         if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
             File photoFile = null;
             try {
-                photoFile = createImageFile();
+                photoFile = createImageFile(); // Δημιουργία αρχείου
             } catch (IOException ex) {
                 Log.d("PHOTOTAG", "OOPS SOmEthing Happened");
             }
@@ -326,30 +311,30 @@ public class GalleryGrid extends AppCompatActivity {
                 photoURI = FileProvider.getUriForFile(this,
                         "com.example.android.gallery_ai.fileprovider",
                         photoFile);
-                takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, photoURI);
-                startActivityForResult(takePictureIntent, REQUEST_CODE_CAMERA);
+                takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, photoURI); // Πέρασμα uri φωτογραφίας μέσω του intent
+                startActivityForResult(takePictureIntent, REQUEST_CODE_CAMERA); // Εκκίνηση του Activity result
             }
         }
     }
 
     private File createImageFile() throws IOException {
         // Create an image file name
-        @SuppressLint("SimpleDateFormat") String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
-        String imageFileName = "JPEG_" + timeStamp + "_";
-        File storageDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
-        File image = File.createTempFile(
+        @SuppressLint("SimpleDateFormat") String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()); // Δημιουργία timestamp
+        String imageFileName = "JPEG_" + timeStamp + "_"; // Όνομα αρχείου βάσει του timestamp
+        File storageDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES); // Εύρεση εξωτερικής τοποθεσίας
+        File image = File.createTempFile(   // Δημιουργία προσωρινού αρχείου
                 imageFileName,  /* prefix */
                 ".jpg",         /* suffix */
                 storageDir      /* directory */
         );
         // Save a file: path for use with ACTION_VIEW intents
         currentPhotoPath = image.getAbsolutePath();
-        return image;
+        return image; // Επιστροφή αρχείου εικόνας
     }
 
     private File createImageFileMultiple(int label) throws IOException {
         // Create an image file name
-        @SuppressLint("SimpleDateFormat") String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+        @SuppressLint("SimpleDateFormat") String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()); // Ομοίως με την createImageFile() με τη δημιουργία πολλών αρχείων με timeStamp + αριθμός αρχείου
         String imageFileName = "JPEG_" + timeStamp + "_"+label;
         File storageDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
         File image = File.createTempFile(
@@ -359,10 +344,10 @@ public class GalleryGrid extends AppCompatActivity {
         );
         // Save a file: path for use with ACTION_VIEW intents
         currentPhotoPath = image.getAbsolutePath();
-        return image;
+        return image; // Επιστροφή αρχείου
     }
 
-    private void chooseImage(){
+    private void chooseImage(){ // Επιλογή εικόνας - εικόνων
         Intent intent = new Intent();
         intent.setType("image/*");
         intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
@@ -370,114 +355,37 @@ public class GalleryGrid extends AppCompatActivity {
         startActivityForResult(Intent.createChooser(intent, "Select Picture"), PICK_IMAGE);
     }
 
-    public void checkifNewUser(){
+    public void checkifNewUser(){ // Έλεγχος νέου χρήστη
 
         try{
-            db.collection(userID);
+            db.collection(userID); // Σε περίπτωση που υπάρχει δεν γίνεαι κάτι
 
         }catch (Exception e){
-            db.collection(userID).document("thisEMptyDOc").set(dummyHash);
+            db.collection(userID).document("thisEMptyDOc").set(dummyHash); // Εαν δεν υπάρχει δημιουργείται κενή καταχώριση ώστε να μην δημιουργείται error
         }
     }
-
-
-
-    private Map.Entry<String,Float> localTensor(Bitmap bitmap) throws IOException {
-        long startTimet = System.nanoTime();
-        MappedByteBuffer tfliteModel = FileUtil.loadMappedFile(this, "resnet_v2_101_29d9.tflite");
-        Interpreter tflite = new Interpreter(tfliteModel, tfliteOptions);
-        // Loads labels out from the label file.
-        labels = FileUtil.loadLabels(this, "labels_mobilenet_quant_v1_224.txt");
-        int imageTensorIndex = 0;
-        int[] imageShape = tflite.getInputTensor(imageTensorIndex).shape(); // {1, height, width, 3}
-        imageSizeY = imageShape[1];
-        imageSizeX = imageShape[2];
-        DataType imageDataType = tflite.getInputTensor(imageTensorIndex).dataType();
-        int probabilityTensorIndex = 0;
-        int[] probabilityShape =
-                tflite.getOutputTensor(probabilityTensorIndex).shape(); // {1, NUM_CLASSES}
-        DataType probabilityDataType = tflite.getOutputTensor(probabilityTensorIndex).dataType();
-
-        // Creates the input tensor.
-        inputImageBuffer = new TensorImage(imageDataType);
-
-        // Creates the output tensor and its processor.
-        outputProbabilityBuffer = TensorBuffer.createFixedSize(probabilityShape, probabilityDataType);
-        probabilityProcessor = new TensorProcessor.Builder().build();
-        inputImageBuffer = loadImage(bitmap,0);
-
-        tflite.run(inputImageBuffer.getBuffer(), outputProbabilityBuffer.getBuffer().rewind());
-        Map<String, Float> labeledProbability =
-                new TensorLabel(labels, probabilityProcessor.process(outputProbabilityBuffer))
-                        .getMapWithFloatValue();
-
-
-        Map.Entry<String, Float> maxEntry = null;
-
-        for (Map.Entry<String, Float> entry : labeledProbability.entrySet())
-        {
-            if (maxEntry == null || entry.getValue().compareTo(maxEntry.getValue()) > 0)
-            {
-                maxEntry = entry;
-            }
-        }
-        long endTimet = System.nanoTime();
-        long duration = endTimet - startTimet;
-        System.out.println("Xronos local TEnsor: "+maxEntry.getKey());
-    return maxEntry;
-    }
-
-    /*private void uploadToFirebase(final Uri uri, String theKey, File postFile, int loop, String generatedLabel){
-
-        final StorageReference image = initialReference.child("dogs/"+generatedLabel);
-        //final String generatedLabel = generateLabel(timeStamp, loop);
-
-        image.putFile(uri).addOnSuccessListener(new OnSuccessListener<UploadTask.TaskSnapshot>() {
-                    @Override
-                    public void onSuccess(UploadTask.TaskSnapshot taskSnapshot) {
-                        image.getDownloadUrl().addOnSuccessListener(new OnSuccessListener<Uri>() {
-                            @Override
-                            public void onSuccess(Uri uri) { final FirebaseFirestore db = FirebaseFirestore.getInstance();
-                            imageData.put("url",uri.toString());
-                            imageData.put("timestamp",generatedLabel);
-                            imageData.put("label",theKey);
-                            addToFirestore(db, generatedLabel, imageData);
-
-                            new updateImageViews().execute();
-
-                            //updateImages.start();
-                            Toast.makeText(getApplicationContext(), "Η εικόνα ανέβηκε με επιτυχία", Toast.LENGTH_SHORT).show();
-                            }
-                        });
-                    }
-        }).addOnFailureListener(new OnFailureListener() {
-                    @Override
-                    public void onFailure(@NonNull Exception e) { Toast.makeText(getApplicationContext(), "Υπήρξε κάποιο σφάλμα κατά το ανέβασμα της εικόνας", Toast.LENGTH_SHORT).show();
-
-                    }});
-    }*/
 
 
     @SuppressLint("StaticFieldLeak")
-    public class updateImageViews extends AsyncTask<Void, Void, Void> {
+    public class updateImageViews extends AsyncTask<Void, Void, Void> { // Ασύγχρονη ανανέωση εικόνων του GridView με τη βοήθεια του AsyncTask
         @Override
         protected Void doInBackground(Void... voids) {
-            CollectionReference collRef = db.collection(userID);
-            collRef.orderBy("timestamp", Direction.DESCENDING).get().
+            CollectionReference collRef = db.collection(userID); // Αναφορά στο Collection του FireStore με το αναγνωριστικό χρήστη
+            collRef.orderBy("timestamp", Direction.DESCENDING).get(). // Ταξινόμηση collection σύμφωνα με το timeStamp
                     addOnCompleteListener(
                             new OnCompleteListener<QuerySnapshot>() {
                                 @Override
                                 public void onComplete(@NonNull Task<QuerySnapshot> task) {
                                     if (task.isSuccessful()) {
-                                        userLabels.clear();
+                                        userLabels.clear(); // Αδειάζουμε τα Arraylist για την εμφάνιση της νέας λίστας εικόνων
                                         userUrls.clear();
                                         userTimestamps.clear();
                                         for (QueryDocumentSnapshot document : task.getResult()) {
-                                            userLabels.add(document.getData().get("label").toString());
+                                            userLabels.add(document.getData().get("label").toString()); // Προσθήκη στοιχείων εικόνων χρήστη στα ArrayList
                                             userUrls.add(document.getData().get("url").toString());
                                             userTimestamps.add(document.getData().get("timestamp").toString());
                                         }
-                                        ImageAdapterGridView adapter = new ImageAdapterGridView(GalleryGrid.this, userUrls.size());
+                                        ImageAdapterGridView adapter = new ImageAdapterGridView(GalleryGrid.this, userUrls.size()); // Προσθήκη των εικόνων στο GridView
                                         androidGridView.setAdapter(adapter);
                                     } else {
                                         Log.d("TAG", "No such document");
@@ -494,8 +402,8 @@ public class GalleryGrid extends AppCompatActivity {
 
 
     public class ImageAdapterGridView extends BaseAdapter {
-        private final Context mContext;
-        private final int mCount;
+        private final Context mContext; // Το Context της δραστηριότητας
+        private final int mCount; // Ο αριθμός των στοιχείων
 
 
         public ImageAdapterGridView(Context c, int a) {
@@ -517,23 +425,23 @@ public class GalleryGrid extends AppCompatActivity {
 
         public View getView(final int position, View convertView, ViewGroup parent) {
             LayoutInflater li = ((Activity) mContext).getLayoutInflater();
-            @SuppressLint({"ViewHolder", "InflateParams"}) final View myView= li.inflate(R.layout.row_data, null);
-            final ImageView img =  myView.findViewById(R.id.imagelayout);
-            TextView txt =  myView.findViewById(R.id.textlayout);
-            txt.setText(userLabels.get(position));
-            Log.d("TAGI",String.valueOf(position));
-            Picasso.with(mContext).load(userUrls.get(position)).fit().centerCrop().into(img);
+            @SuppressLint({"ViewHolder", "InflateParams"}) final View myView= li.inflate(R.layout.row_data, null); // Δημιουργία τετραγώνου εμφάνισης εικόνας
+            final ImageView img =  myView.findViewById(R.id.imagelayout); // Θέση Εικόνας
+            TextView txt =  myView.findViewById(R.id.textlayout); // Θέση Label Ταξινόμησης
+            txt.setText(userLabels.get(position)); // Label απο τα arraylist που παίρνουμε απο το FireStore
 
-            androidGridView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            Picasso.with(mContext).load(userUrls.get(position)).fit().centerCrop().into(img); // Εφαρμογή εικόνας στο τετράγωνο του GridView
+
+            androidGridView.setOnItemClickListener(new AdapterView.OnItemClickListener() { // Δημιουργία listener για κάθε τετράγωνο του GridView
                 public void onItemClick(AdapterView<?> parent,
                                         View v, int position, long id) {
                     Toast.makeText(getBaseContext(), "Grid Item " + (position + 1) + " Selected", Toast.LENGTH_LONG).show();
-                    Intent myIntent = new Intent(GalleryGrid.this, FullScreen.class);
-                    myIntent.putExtra("tourl", userUrls.get(position));
+                    Intent myIntent = new Intent(GalleryGrid.this, FullScreen.class); // Με το πάτημα κάθε τετραγώνου εμφανιζεται η αντίστοιχη εικόνα
+                    myIntent.putExtra("tourl", userUrls.get(position)); // Πέρασμα τιμών url, label, timestamp στο επόμενο Activity
                     myIntent.putExtra("tolabel", userLabels.get(position));
                     myIntent.putExtra("totimestamp", userTimestamps.get(position));
-                    startActivity(myIntent);
-                    overridePendingTransition(R.anim.zoom_enter, R.anim.zoom_exit);
+                    startActivity(myIntent); // Έναρξη νέας δραστηριότητας
+                    overridePendingTransition(R.anim.zoom_enter, R.anim.zoom_exit); // Μετάβαση - Animation οθόνης
                 }
             });
             return myView;
@@ -541,33 +449,33 @@ public class GalleryGrid extends AppCompatActivity {
     }
 
     public void addToFirestore(FirebaseFirestore collection, String label, Map<String, Object>  data){
-        collection.collection(userID).document(label).set(data);
+        collection.collection(userID).document(label).set(data); // Προσθήκη στοιχείων εικόνας στο FireStore
     }
     public String generateLabel(String dummyValue, int count){
-        return dummyValue+count;
+        return dummyValue+count; // TimeStamp + αριθμός
     }
 
-    private void searchLabels(final String queue){
-            CollectionReference collRef = db.collection(userID);
+    private void searchLabels(final String queue){ // Αναζήτηση στο GridView βάσει label
+            CollectionReference collRef = db.collection(userID); // Αναφορά στο Collection του FireStore
 
-            collRef.orderBy("timestamp", Direction.DESCENDING).get().
+            collRef.orderBy("timestamp", Direction.DESCENDING).get(). // Ταξινόμηση collection
                     addOnCompleteListener(
                             new OnCompleteListener<QuerySnapshot>() {
                                 @Override
                                 public void onComplete(@NonNull Task<QuerySnapshot> task) {
                                     if (task.isSuccessful()) {
-                                        userLabels.clear();
+                                        userLabels.clear(); // Καθαρισμός των Arraylist
                                         userUrls.clear();
                                         userTimestamps.clear();
                                         for (QueryDocumentSnapshot document : task.getResult()) {
-                                            if (((String) document.getData().get("label")).contains(queue)) {
-                                                userLabels.add((String) document.getData().get("label"));
+                                            if (((String) document.getData().get("label")).contains(queue)) { // Εμφάνιση αποτελεσμάτων βάσει label
+                                                userLabels.add((String) document.getData().get("label")); // Προσθήκη αποτελεσμάτων σε Arraylist
                                                 userUrls.add(document.getData().get("url").toString());
                                                 userTimestamps.add(document.getData().get("timestamp").toString());
                                             }
                                         }
                                         if(userLabels.size()!=0){
-                                        ImageAdapterGridView adapter = new ImageAdapterGridView(GalleryGrid.this, userUrls.size());
+                                        ImageAdapterGridView adapter = new ImageAdapterGridView(GalleryGrid.this, userUrls.size()); // Εμφάνιση συνόλου αποτελεσμάτων στο GridView
                                         androidGridView.setAdapter(adapter);}
                                     } else {
                                         Log.d("TAG", "No such document");
@@ -577,23 +485,23 @@ public class GalleryGrid extends AppCompatActivity {
     }
 
     public void signOut(){
-        FirebaseAuth.getInstance().signOut();
+        FirebaseAuth.getInstance().signOut(); // Αποσύνδεση Χρήστη
         SharedPreferences saved_values = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
         SharedPreferences.Editor editor = saved_values.edit();
-        editor.remove("userID");
+        editor.remove("userID"); // Αφαίρεση αποθηκευμένων τιμών απο το SharedPreferences
         editor.commit();
-        startActivity(new Intent(GalleryGrid.this, UserLogin.class));
+        startActivity(new Intent(GalleryGrid.this, UserLogin.class)); // Επιστροφή στη δραστηριότητα κύριας οθόνης
 
     }
 
-    public boolean onCreateOptionsMenu(Menu menu) {
+    public boolean onCreateOptionsMenu(Menu menu) { // Εφαρμογή επιλογών menu
         MenuInflater inflater = getMenuInflater();
         inflater.inflate(R.menu.my_options_menu, menu);
         return true;
     }
 
     @SuppressLint("NonConstantResourceId")
-    public boolean onOptionsItemSelected(MenuItem item) {
+    public boolean onOptionsItemSelected(MenuItem item) { // Επιλογές menu
         switch (item.getItemId()) {
             case R.id.signOut:
                 signOut();
@@ -613,7 +521,7 @@ public class GalleryGrid extends AppCompatActivity {
     }
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-    private int getCameraAngle(){
+    private int getCameraAngle(){ // Γωνία αποθήκευσης εικόνας απο τη συσκευή
         CameraManager manager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
         int orientation = 0;
         try{
@@ -628,7 +536,7 @@ public class GalleryGrid extends AppCompatActivity {
         }
     }
 
-    public Bitmap rotateBitmap(Bitmap original, float degrees) {
+    public Bitmap rotateBitmap(Bitmap original, float degrees) { // Περιστροφή Bitmap
         Matrix matrix = new Matrix();
         matrix.preRotate(degrees);
         Bitmap rotatedBitmap = Bitmap.createBitmap(original, 0, 0, original.getWidth(), original.getHeight(), matrix, true);
@@ -636,35 +544,18 @@ public class GalleryGrid extends AppCompatActivity {
         return rotatedBitmap;
     }
 
-    private TensorImage loadImage(final Bitmap bitmap, int sensorOrientation) {
-        // Loads bitmap into a TensorImage.
-        inputImageBuffer.load(bitmap);
-        // Creates processor for the TensorImage.
-        int cropSize = min(bitmap.getWidth(), bitmap.getHeight());
-        int numRotation = sensorOrientation / 90;
-        // TODO(b/143564309): Fuse ops inside ImageProcessor.
-        ImageProcessor imageProcessor =
-                new ImageProcessor.Builder()
-                        .add(new ResizeWithCropOrPadOp(cropSize, cropSize))
-                        // TODO(b/169379396): investigate the impact of the resize algorithm on accuracy.
-                        // To get the same inference results as lib_task_api, which is built on top of the Task
-                        // Library, use ResizeMethod.BILINEAR.
-                        .add(new ResizeOp(imageSizeX, imageSizeY, ResizeOp.ResizeMethod.NEAREST_NEIGHBOR))
-                        .add(new Rot90Op(numRotation))
-                        .build();
-        return imageProcessor.process(inputImageBuffer);
-    }
+
 
     private void theSharedPref(){
-        SharedPreferences sp = getSharedPreferences("lastUser", MODE_PRIVATE);
+        SharedPreferences sp = getSharedPreferences("lastUser", MODE_PRIVATE); // Αποθήκευση σύνδεσης χρήστη με το αναγνωριστικό χρήστη
         SharedPreferences.Editor editor = sp.edit();
         editor.putString("userID", userID);
         editor.apply();
     }
 
     private void selectMLModels(){
-        Spinner s = findViewById(R.id.spinner);
-        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, names);
+        Spinner s = findViewById(R.id.spinner); // Επιλογέας για μοντέλα μηχανικής μάθησης
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, names); // Προσθήκη μοντέλων στον adapter
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         s.setAdapter(adapter);
 
@@ -672,11 +563,11 @@ public class GalleryGrid extends AppCompatActivity {
         {
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id)
             {
-                modelLink = theAddress + arraySpinner[position];
+                modelLink = theAddress + arraySpinner[position]; // δημιουργία τελικής διεύθυνσης στο Server Ταξινόμησης
             } // to close the onItemSelected
             public void onNothingSelected(AdapterView<?> parent)
             {
-                modelLink = theAddress + names[s.getSelectedItemPosition()];
+                modelLink = theAddress + names[s.getSelectedItemPosition()]; // Στην αρχή επιλογή πρώτου
             }
         });
     }
@@ -698,9 +589,9 @@ public class GalleryGrid extends AppCompatActivity {
         }
 
         public void postRequest(String url, String documentID, File file, long startTime, int i){
-            Log.d("documentID", documentID);
-            AndroidNetworking.upload(url)
-                    .addMultipartFile("image",file)
+
+            AndroidNetworking.upload(url) // Δημιουργία POST Request προς το επιθυμητό URL του Server Ταξινόμησης
+                    .addMultipartFile("image",file) // Το αρχείο είναι multipart καθώς αποστέονται ολόκληρα τα αρχεία εικόνων
                     .setPriority(Priority.HIGH)
                     .build()
                     .setUploadProgressListener(new UploadProgressListener() {
@@ -717,19 +608,15 @@ public class GalleryGrid extends AppCompatActivity {
                             Log.d("XRONOS", String.valueOf(MethodeDuration/1000000000.00));
                             // do anything with response
                             try {
-                                JSONArray maxResult = response.getJSONArray("labels");
+                                JSONArray maxResult = response.getJSONArray("labels"); // Με το που επιστρέφει το response απο τον server με την ταξινόμηση των εικόνων
                                 //JSONObject maxResult = (JSONObject) response.getJSONArray("labels").get(0);
-                                db.collection(userID).document(documentID).update("label", maxResult.get(0))
+                                db.collection(userID).document(documentID).update("label", maxResult.get(0)) // Γίνεται update των στοιχείων της φωτογραφίας στο FireStore
                                         .addOnSuccessListener(new OnSuccessListener<Void>() {
                                             @Override
                                             public void onSuccess(Void aVoid) {
                                                 Log.d("TAG", "DocumentSnapshot successfully updated!");
-                                                new updateImageViews().execute();
+                                                new updateImageViews().execute(); // Με την επιτυχία αναβάθμισης του label της εικόνας, ανανεώνεται και η λίστα εικόνων στο GridView της κύριας οθόνης
                                                 //long MethodeDuration = 0;
-                                                if(i!=100){
-                                                    Toast.makeText(getApplicationContext(),  String.valueOf(MethodeDuration/1000000000)+"s", Toast.LENGTH_SHORT).show();
-                                                }
-                                                //Log.d("XRONOS", String.valueOf(MethodeDuration/1000000000));
                                             }
                                         })
                                         .addOnFailureListener(new OnFailureListener() {
@@ -755,104 +642,7 @@ public class GalleryGrid extends AppCompatActivity {
         }
     }
 
-    private class multipleMLUpload implements Runnable {
-        private volatile String myParam;
-        private volatile String mydocID;
-        private volatile File myFile;
-        private volatile long startTime;
-        private volatile int i;
-        ArrayList<File> photo1 = new ArrayList<>();
 
-
-        public multipleMLUpload(String myParam, String mydocID, File myFile, long startTime, int i){
-            this.myParam = myParam;
-            this.mydocID = mydocID;
-            this.myFile = myFile;
-            this.startTime = startTime;
-            this.i = i;
-
-        }
-
-        public void postRequest(String url, String documentID, File file, long startTime, int i){
-            photo1.add(file);
-            long second = System.nanoTime();
-            final double[] delay = new double[1];
-            Log.d("documentID", documentID);
-            OkHttpClient okHttpClient = new OkHttpClient().newBuilder()
-                    .connectTimeout(120, TimeUnit.SECONDS)
-                    .readTimeout(120, TimeUnit.SECONDS)
-                    . writeTimeout(120, TimeUnit.SECONDS)
-                    .build();
-            AndroidNetworking.upload(modelLink)
-                    .setOkHttpClient(okHttpClient)
-                    .addMultipartFileList("image", photo1)
-                    .setPriority(Priority.HIGH)
-                    .build()
-                    .setUploadProgressListener(new UploadProgressListener() {
-                        @Override
-                        public void onProgress(long bytesUploaded, long totalBytes) {
-                            Log.d("Uploaded...", bytesUploaded+"/"+totalBytes);
-                            // do anything with progress
-                            if(bytesUploaded==totalBytes){
-                                Log.d("Xronos anevasmatos", String.valueOf((System.nanoTime() - second)/1000000000.00));
-                                delay[0] = (double) System.nanoTime()/1000000000;
-                            }
-                        }
-                    })
-                    .getAsJSONObject(new JSONObjectRequestListener() {
-                        @Override
-                        public void onResponse(JSONObject response) {
-                            long third = System.nanoTime();
-                            //Log.d("Xronos delay", String.valueOf((third - delay[0])/1000000000.00));
-
-                            // do anything with response
-                            try {
-                                JSONArray maxResult = response.getJSONArray("labels");
-
-                                double theAnswer = (double) System.nanoTime()/1000000000;
-                                JSONArray times = response.getJSONArray("times");
-                                double addedTime = (double) (times.get(0)) + (double) (times.get(1));
-                                Log.d("Xronos dia server", String.valueOf((times.get(0))));
-                                Log.d("Xronos inf server", String.valueOf((times.get(1))));
-                                Log.d("Xronos apanthshs", String.valueOf((theAnswer - delay[0] - addedTime)));
-
-
-
-
-                                third= System.nanoTime();
-                                db.collection(userID).document(documentID).update("label", maxResult.get(0))
-                                        .addOnSuccessListener(new OnSuccessListener<Void>() {
-                                            @Override
-                                            public void onSuccess(Void aVoid) {
-
-                                            }
-                                        })
-                                        .addOnFailureListener(new OnFailureListener() {
-                                            @Override
-                                            public void onFailure(@NonNull Exception e) {
-                                                Log.w("TAG", "Error updating document", e);
-                                            }
-                                        });
-                                new updateImageViews().execute();
-                                Log.d("Xronos sto firestore", String.valueOf((System.nanoTime() - third)/1000000000.00));
-                                Log.d("Synolikos xronos", String.valueOf((System.nanoTime() - startTime)/1000000000.00));
-
-                                //uploadToFirebase(Uri.fromFile(file), (String) maxResult.get("label"));
-                            } catch (JSONException e) {
-                                e.printStackTrace();
-                            }
-                        }
-                        @Override
-                        public void onError(ANError error) {
-                            // handle error
-                        }
-                    });
-        }
-
-        public void run(){
-            postRequest(myParam,mydocID,myFile, startTime, i);
-        }
-    }
 
     private class firebaseUpload implements Runnable {
         private volatile Uri uri;
@@ -872,24 +662,20 @@ public class GalleryGrid extends AppCompatActivity {
         }
 
         private void uploadToFirebase(final Uri uri, String theKey, String generatedLabel, File myFile, Bitmap bitmap){
-            final StorageReference image = initialReference.child("dogs/"+generatedLabel);
-            image.putFile(uri).addOnSuccessListener(new OnSuccessListener<UploadTask.TaskSnapshot>() {
+            final StorageReference image = initialReference.child("dogs/"+generatedLabel); // Μεταβλητή αναφοράς στο Firebase Storage
+            image.putFile(uri).addOnSuccessListener(new OnSuccessListener<UploadTask.TaskSnapshot>() { // Μεταφόρτωση εικόνας στο Firebase Storage
                 @Override
                 public void onSuccess(UploadTask.TaskSnapshot taskSnapshot) {
-                    image.getDownloadUrl().addOnSuccessListener(new OnSuccessListener<Uri>() {
+                    image.getDownloadUrl().addOnSuccessListener(new OnSuccessListener<Uri>() { // Απόκτηση url εικόνας απο το Firebase Storage
                         @Override
                         public void onSuccess(Uri uri) {
-                            //imageData.put("url",uri.toString());
-                            //imageData.put("timestamp",generatedLabel);
-                            //imageData.put("label","loading...");
-                            //addToFirestore(db, generatedLabel, imageData);
 
-                            new updateImageViews().execute();
-                            db.collection(userID).document(genLabel).update("url",uri.toString())
+                            new updateImageViews().execute(); // Ανανέωση GridView κύριας οθόνης με την επιτυχία upload της εικόνας
+                            db.collection(userID).document(genLabel).update("url",uri.toString()) // Ενημέρωση με το url της εικόνας στο FireStore
                                     .addOnSuccessListener(new OnSuccessListener<Void>() {
                                         @Override
                                         public void onSuccess(Void aVoid) {
-                                            new updateImageViews().execute();
+                                            new updateImageViews().execute(); // Επανάληψη ανανέωσης εικόνων
                                         }
                                     })
                                     .addOnFailureListener(new OnFailureListener() {
@@ -897,14 +683,6 @@ public class GalleryGrid extends AppCompatActivity {
                                         public void onFailure(@NonNull Exception e) {
                                         }
                                     });
-
-                            if(offlineMode==1){
-                                try {
-                                    localTensor(bitmap).getKey();
-                                } catch (IOException e) {
-                                    e.printStackTrace();
-                                }
-                           }
                             Toast.makeText(getApplicationContext(), "Η εικόνα ανέβηκε με επιτυχία", Toast.LENGTH_SHORT).show();
                         }
                     });
@@ -923,10 +701,10 @@ public class GalleryGrid extends AppCompatActivity {
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     public Bitmap fixImage(Bitmap bitmap){
-        int cameraAngle = getCameraAngle();
+        int cameraAngle = getCameraAngle(); // Εύρεση γωνίας εικόνας
         String manufacturer = Build.MANUFACTURER;
-        if(manufacturer.equals("XIAOMI")||manufacturer.equals("Xiaomi")||manufacturer.equals("Samsung")||manufacturer.equals("SAMSUNG")) {
-            if(cameraAngle == 180){bitmap = rotateBitmap(bitmap,180);}
+        if(manufacturer.equals("XIAOMI")||manufacturer.equals("Xiaomi")||manufacturer.equals("Samsung")||manufacturer.equals("SAMSUNG")) { // Διαφορετικές γωνίες κάποιων κατασκευαστών
+            if(cameraAngle == 180){bitmap = rotateBitmap(bitmap,180);} // Αντίστοιχη περιστροφή
             else if(cameraAngle == 270){bitmap = rotateBitmap(bitmap,90);}
 
     }return bitmap;
@@ -943,9 +721,6 @@ public class GalleryGrid extends AppCompatActivity {
         private volatile ArrayList<Integer> orderNums;
 
 
-
-
-
         public closeitAll2(ClipData mItem, String timeStamp, long startTimeBatch, int i, List<File> FOTO, List<File> filesOne, ArrayList<String> genLabels, ArrayList<Integer> orderNums){
             this.mItem = mItem;
             this.i = i;
@@ -960,19 +735,19 @@ public class GalleryGrid extends AppCompatActivity {
         @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
         public void doSmth(ClipData mItem, String timeStamp, long startTimeBatch, int i, List<File> FOTO, List<File> filesOne, ArrayList<String> genLabels,  ArrayList<Integer> orderNums) throws IOException {
 
-            File f = createImageFileMultiple(i);
-            File f2 = new File(currentPhotoPath+i);
-            Bitmap bitmap2 = getBitmapFormUri(GalleryGrid.this, mItem.getItemAt(i).getUri(),224,224);
-            FileOutputStream out2 = new FileOutputStream(f2);
-            bitmap2 = fixImage(bitmap2);
+            File f = createImageFileMultiple(i); // Δημιουργία πολλαπλών αρχείων με timestamp + αύξοντα αριθμό το πρώτο αρχείο για το FireBase Storage
+            File f2 = new File(currentPhotoPath+i); // Το δεύτερο για το Server Ταξινόμησης
+            Bitmap bitmap2 = getBitmapFormUri(GalleryGrid.this, mItem.getItemAt(i).getUri(),224,224); // Κλιμάκωση εικόνων που αποστέλονται στον Server Ταξινόμησης
+            FileOutputStream out2 = new FileOutputStream(f2); // Δημιουργία ροής αρχείο
+            bitmap2 = fixImage(bitmap2); // Διόρθωση γωνίας αποθήκευσης εικόνας
             if(offlineMode==0) {
-                bitmap2 = Bitmap.createScaledBitmap(bitmap2, 331, 331, true);
-                bitmap2.compress(Bitmap.CompressFormat.JPEG, 25, out2);
-                String genLabel = generateLabel(timeStamp,i);
+                bitmap2 = Bitmap.createScaledBitmap(bitmap2, 331, 331, true); // Κλιμάκωση ξανά
+                bitmap2.compress(Bitmap.CompressFormat.JPEG, 25, out2); // Συμπίεση εικόνας Server Ταξινόμησης
+                String genLabel = generateLabel(timeStamp,i); // Δημουργία timestamp label
                 dummyHash.put("timestamp", genLabel);
-                addToFirestore(db,genLabel,dummyHash);
-                //sygekrimenh thesh
-                FOTO.add(f2);
+                addToFirestore(db,genLabel,dummyHash); // Προσθήκη στο FireStore placeholder τιμής
+
+                FOTO.add(f2); // Δημιουργία λίστα αρχείων για την αποστολή στο Server Ταξινόμησης
                 filesOne.add(f);
                 genLabels.add(genLabel);
                 orderNums.add(i);
@@ -980,7 +755,7 @@ public class GalleryGrid extends AppCompatActivity {
 
             }
 
-            if(FOTO.size()== mItem.getItemCount()){
+            if(FOTO.size()== mItem.getItemCount()){ // Ταξινόμηση νέων εικόνων απο τα διαφορετικά Threads βάσει του timestamp
                 Map<Integer, File> map = new HashMap<Integer, File>();
                 Map<Integer, File> map2 = new HashMap<Integer, File>();
                 Map<Integer, String> map3 = new HashMap<Integer, String>();
@@ -1009,9 +784,9 @@ public class GalleryGrid extends AppCompatActivity {
                     .readTimeout(300, TimeUnit.SECONDS)
                     . writeTimeout(300, TimeUnit.SECONDS)
                     .build();
-            AndroidNetworking.upload(modelLink)
+            AndroidNetworking.upload(modelLink) // Αποστολή εικόνων στο Server Ταξινόμησης
                     .setOkHttpClient(okHttpClient)
-                        .addMultipartFileList("image", FOTO)
+                        .addMultipartFileList("image", FOTO) // Αποστολή αρχείων εικόνων με POST Request
                         .setPriority(Priority.HIGH)
                         .build()
                         .setUploadProgressListener(new UploadProgressListener() {
@@ -1036,17 +811,14 @@ public class GalleryGrid extends AppCompatActivity {
                                     JSONArray maxResult = response.getJSONArray("labels");
                                     JSONArray times = response.getJSONArray("times");
                                     double addedTime = (double) (times.get(0)) + (double) (times.get(1));
-                                    Log.d("Xronos dia server", String.valueOf((times.get(0))));
-                                    Log.d("Xronos inf server", String.valueOf((times.get(1))));
-                                    //Log.d("Xronos apanthshs", String.valueOf((theAnswer - delay[0] - addedTime)));
+
                                     long startingUpdateTime = System.nanoTime();
-                                    for(int i = 0; i< maxResult.length(); i++){
+                                    for(int i = 0; i< maxResult.length(); i++){ // Ανανέωση label εικόνων στο FireStore
                                         db.collection(userID).document(genLabels.get(i)).update("label", maxResult.get(i))
                                                 .addOnSuccessListener(new OnSuccessListener<Void>() {
                                                     @Override
                                                     public void onSuccess(Void aVoid) {
                                                         Log.d("TAG", "DocumentSnapshot successfully updated!");
-
                                                     }
                                                 })
                                                 .addOnFailureListener(new OnFailureListener() {
@@ -1056,7 +828,7 @@ public class GalleryGrid extends AppCompatActivity {
                                                     }
                                                 });
                                     }
-                                    new updateImageViews().execute();
+                                    new updateImageViews().execute(); // Ανανέωση GridView κ΄ρυιας οθόνης
 
                                 } catch (JSONException e) {
                                     e.printStackTrace();
@@ -1070,24 +842,19 @@ public class GalleryGrid extends AppCompatActivity {
 
             for(int j=0;j<genLabels.size();j++){
                 Bitmap bitmap = getBitmapFormUri(GalleryGrid.this, mItem.getItemAt(j).getUri(), 1000,500);
-                FileOutputStream out = new FileOutputStream(filesOne.get(j));
+                FileOutputStream out = new FileOutputStream(filesOne.get(j)); // Κλιμάκωση εικόνας
 
                 bitmap.compress(Bitmap.CompressFormat.JPEG, 25, out);
-                firebaseUpload fbupload = new firebaseUpload(Uri.fromFile(filesOne.get(j)), "loading...", genLabels.get(j), filesOne.get(j), bitmap);
+                firebaseUpload fbupload = new firebaseUpload(Uri.fromFile(filesOne.get(j)), "loading...", genLabels.get(j), filesOne.get(j), bitmap); // Αποστολή εικόνων στο Firebase Storage
                 new Thread(fbupload).start();
             }
                 //FOTO.clear();
                 //filesOne.clear();
                 //genLabels.clear();
-
-
-
                 //MyRunnable theRunnable = new MyRunnable(modelLink, genLabel, f2, startTimeBatch, i);
                 //new Thread(theRunnable).start();
             }
         }
-
-
 
         @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
         public void run(){
@@ -1099,7 +866,7 @@ public class GalleryGrid extends AppCompatActivity {
         }
     }
 
-    public static Bitmap getBitmapFormUri(Activity ac, Uri uri, float hh, float ww) throws FileNotFoundException, IOException {
+    public static Bitmap getBitmapFormUri(Activity ac, Uri uri, float hh, float ww) throws FileNotFoundException, IOException { // Κλιμάκωση εικόνων
         InputStream input = ac.getContentResolver().openInputStream(uri);
         BitmapFactory.Options onlyBoundsOptions = new BitmapFactory.Options();
         onlyBoundsOptions.inJustDecodeBounds = true;
@@ -1146,7 +913,7 @@ public class GalleryGrid extends AppCompatActivity {
      * @param image
      * @return
      */
-    public static Bitmap compressImage(Bitmap image) {
+    public static Bitmap compressImage(Bitmap image) { // Περαιτέρω συμπίεση εικόνων
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         image.compress(Bitmap.CompressFormat.JPEG, 100, baos);//Quality compression method, here 100 means no compression, store the compressed data in the BIOS
         int options = 100;

@@ -33,18 +33,18 @@ public class FullScreen extends AppCompatActivity {
         super.onCreate(savedInstanceState);
 
         Intent intent = getIntent();
-        final String label = intent.getStringExtra("tolabel");
+        final String label = intent.getStringExtra("tolabel"); // lebel, uri, και timestamp εικόνας απο το Activity του GalleryGrid
         final String uri = intent.getStringExtra("tourl");
         final String timestamp = intent.getStringExtra("totimestamp");
 
 
-        hideStatusBar();
-        initElements();
-        setData(label, uri);
-        setListeners(label, uri, timestamp);
+        hideStatusBar(); // Απόκρυψη StatusBar
+        initElements(); // Αρχικοποίηση όλων των στοιχείων
+        setData(label, uri); // Εισαγωγή εικόνας και Label στο ImageView
+        setListeners(label, uri, timestamp); // Listener για το delete button
     }
 
-    private void deletePhoto(String collection, String document, String imageUri, String thetimeStamp){
+    private void deletePhoto(String collection, String document, String imageUri, String thetimeStamp){ // Διαγραφή εικόνων με το κομπί delete
         FirebaseFirestore db = FirebaseFirestore.getInstance();
         FirebaseStorage firebaseStorage = FirebaseStorage.getInstance();
         StorageReference storageReference = firebaseStorage.getReferenceFromUrl(imageUri);
@@ -60,7 +60,7 @@ public class FullScreen extends AppCompatActivity {
 
         db.collection(collection).document(thetimeStamp)
                 .delete()
-                .addOnSuccessListener(new OnSuccessListener<Void>() {
+                .addOnSuccessListener(new OnSuccessListener<Void>() { // Διαδικασία διαγραφής
                     @Override
                     public void onSuccess(Void aVoid) {
                         startActivity(new Intent(FullScreen.this, GalleryGrid.class));

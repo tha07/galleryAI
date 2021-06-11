@@ -17,6 +17,7 @@
         android:icon="@drawable/camera"
         android:label="@string/app_name"
         android:largeHeap="true"
+        android:usesCleartextTraffic="true"
         android:roundIcon="@drawable/camera"
         android:supportsRtl="true"
         android:theme="@style/AppTheme"
